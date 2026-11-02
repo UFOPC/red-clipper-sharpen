@@ -1,0 +1,134 @@
+/* 什么值得买适配：入口胶囊 + 保存面板
+ * 胶囊挂在日期/点赞那一行（.recommend-tab）右侧空白处，所以面板向左下展开。
+ */
+.xhx-zdm-slot {
+  position: relative;
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  z-index: 2;
+}
+
+.xhx-zdm-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid #ef493d;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 400 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #ef493d;
+  transition: background 0.18s;
+}
+.xhx-zdm-entry:hover { background: #fff5f4; }
+.xhx-zdm-entry img { width: 18px; height: 18px; display: block; pointer-events: none; }
+.xhx-zdm-entry span { font-size: 13px; font-weight: 500; white-space: nowrap; }
+
+/* 胶囊在这一行最右端，面板必须向左伸，向右会直接出屏 */
+.xhx-zdm-panel {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 1002;
+  display: none;
+  width: 128px;
+  padding: 13px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+  text-align: left;
+  font: 400 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2328;
+}
+/* 胶囊与面板之间 9px 是死区，用透明伪元素并进命中区 */
+.xhx-zdm-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.xhx-zdm-slot.is-open .xhx-zdm-panel,
+.xhx-zdm-slot.is-pinned .xhx-zdm-panel { display: block; }
+
+/* 同少数派：「图片」正文字号，张数小字跟在后面 */
+.xhx-zdm-qhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2328;
+}
+.xhx-zdm-qhead .cnt { font-size: 11px; font-weight: 400; color: #6b7280; font-variant-numeric: tabular-nums; }
+/* 两行分段控件：上排选要不要图，下排选图片格式。
+ * 128px 放不下「1080 宽 / 710 宽」这种带单位的写法，格式那排只留数字——
+ * 上面「图片」两个字已经说明了这排说的是什么。 */
+.xhx-zdm-seg {
+  display: flex;
+  gap: 2px;
+  margin-top: 7px;
+  padding: 2px;
+  border-radius: 9px;
+  background: #f3f4f6;
+}
+.xhx-zdm-seg + .xhx-zdm-seg { margin-top: 4px; }
+.xhx-zdm-seg button {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.xhx-zdm-seg button:hover { color: #ef493d; }
+.xhx-zdm-seg button.is-on {
+  background: #fff;
+  color: #ef493d;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.xhx-zdm-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; }
+
+.xhx-zdm-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  border: 1px solid #ef493d;
+  border-radius: 16px;
+  background: #ef493d;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.xhx-zdm-act:hover { background: #d6382d; border-color: #d6382d; }
+.xhx-zdm-act[disabled] { opacity: 0.6; cursor: default; }
+.xhx-zdm-act[disabled]:hover { background: #ef493d; border-color: #ef493d; }
+
+.xhx-zdm-act.is-ghost { background: transparent; color: #ef493d; }
+.xhx-zdm-act.is-ghost:hover { background: #fff5f4; }
+.xhx-zdm-act.is-ghost[disabled]:hover { background: transparent; }

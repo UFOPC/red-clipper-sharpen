@@ -1,0 +1,140 @@
+/* 少数派适配：入口胶囊 + 保存面板
+ * 视觉与小红书那套保持一致（透明胶囊、白卡片下拉、珊瑚主色），但独立成文件，
+ * 因为两个站的 content script 各自注入，不共享 CSS。
+ */
+.sspai-xhx-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.sspai-xhx-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid #ef493d;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 400 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #ef493d;
+  transition: background 0.18s;
+}
+.sspai-xhx-entry:hover { background: #fff5f4; }
+.sspai-xhx-entry img { width: 18px; height: 18px; display: block; pointer-events: none; }
+.sspai-xhx-entry span { font-size: 13px; font-weight: 500; white-space: nowrap; }
+
+/* 宽度按内容量出来的（max-content = 202），不用跟小红书视频面板对齐：
+ * 那边有 3 行「画幅 + 体积」还要放三个按钮，这边只有 2 行短标签和一个按钮。
+ * 硬对齐的结果就是右边空出 34px。 */
+/* 四站统一 180：宽度由内容量决定，取「都放得下」的那个值 */
+.sspai-xhx-panel {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 1002;
+  display: none;
+  width: 128px;
+  padding: 13px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+  text-align: left;
+  font: 400 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2328;
+}
+/* 胶囊与面板之间 9px 是死区，用透明伪元素并进命中区，否则鼠标横穿会掉 hover */
+.sspai-xhx-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.sspai-xhx-slot.is-open .sspai-xhx-panel,
+.sspai-xhx-slot.is-pinned .sspai-xhx-panel { display: block; }
+
+/* 「图片」用正文字号，张数退成小字跟在后面：
+ * 张数是要看的数据，不是这一块的标题，不该跟标题抢字号。 */
+.sspai-xhx-qhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2328;
+}
+/* 左边「图片」，右边张数：两个都是要扫一眼的数据，分开站两头比挤成一串好读 */
+.sspai-xhx-qhead .cnt { font-size: 11px; font-weight: 400; color: #6b7280; font-variant-numeric: tabular-nums; }
+/* 两行分段控件：上排选要不要图，下排选图片格式。
+ * 128px 里放不下「原图 / 1120 宽」这种带单位的写法，格式那排只留数字——
+ * 上面「图片」两个字已经说明了这排说的是什么。 */
+.sspai-xhx-seg {
+  display: flex;
+  gap: 2px;
+  margin-top: 7px;
+  padding: 2px;
+  border-radius: 9px;
+  background: #f3f4f6;
+}
+.sspai-xhx-seg + .sspai-xhx-seg { margin-top: 4px; }
+.sspai-xhx-seg button {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  /* 少数派是深色页面，button 不显式给 color 就会走 UA 的 buttontext */
+  color: #4b5563;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sspai-xhx-seg button:hover { color: #ef493d; }
+.sspai-xhx-seg button.is-on {
+  background: #fff;
+  color: #ef493d;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.sspai-xhx-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; }
+
+.sspai-xhx-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  border: 1px solid #ef493d;
+  border-radius: 16px;
+  background: #ef493d;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.sspai-xhx-act:hover { background: #d6382d; border-color: #d6382d; }
+.sspai-xhx-act[disabled] { opacity: 0.6; cursor: default; }
+.sspai-xhx-act[disabled]:hover { background: #ef493d; border-color: #ef493d; }
+
+.sspai-xhx-act.is-ghost { background: transparent; color: #ef493d; }
+.sspai-xhx-act.is-ghost:hover { background: #fff5f4; }
+.sspai-xhx-act.is-ghost[disabled]:hover { background: transparent; }

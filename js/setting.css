@@ -1,0 +1,24 @@
+:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; color: #342924; background: #fcf8f2; }
+* { box-sizing: border-box; }
+body { margin: 0; width: 400px; min-width: 360px; }
+main { padding: 24px 24px 18px; }
+header { display: flex; align-items: center; gap: 14px; }
+header img { flex-shrink: 0; }
+.eyebrow { font-size: 11px; letter-spacing: 2px; color: #8c7a70; margin: 0 0 7px; }
+h1 { display: flex; align-items: center; gap: 10px; font-size: 24px; line-height: 1.2; margin: 0; letter-spacing: 1px; }
+#version { color: #927c70; font-size: 11px; font-weight: 400; letter-spacing: 0; }
+h2 { font-size: 22px; line-height: 1.5; letter-spacing: -0.4px; margin: 20px 0 8px; font-weight: 750; }
+.intro { color: #806e64; font-size: 12px; line-height: 1.8; margin: 0 0 14px; }
+section { padding: 13px 15px; border: 1px solid #edddd0; border-radius: 14px; background: #fffdf9; }
+section + section { margin-top: 10px; }
+.sites { padding-top: 2px; margin-bottom: 0; }
+.sites li:last-child { padding-bottom: 0; }
+.section-label { font-size: 10px; letter-spacing: 1.6px; margin: 0 0 10px; color: #c54b3d; }
+pre { font-family: "Cascadia Code", Consolas, "Microsoft YaHei", monospace; font-size: 11px; line-height: 1.8; margin: 0; white-space: pre-wrap; }
+ul { list-style: none; padding: 4px 0 0; margin: 4px 0 8px; }
+li { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; font-size: 12px; }
+li strong { width: 92px; flex-shrink: 0; font-weight: 600; }
+li span { color: #806e64; }
+.hint { font-size: 11px; line-height: 1.7; color: #947e70; margin: 0 0 12px; }
+footer { border-top: 1px solid #eadfd5; padding-top: 12px; display: flex; align-items: center; gap: 8px; color: #927c70; font-size: 10px; }
+.dot { color: #ef493d; }

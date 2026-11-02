@@ -1,0 +1,30 @@
+# 发版包不入库（作为 Release 附件）
+*.zip
+*.crx
+
+# 密钥与证书：绝不入库
+*.pem
+*.key
+*.p12
+*.pfx
+
+# 依赖与缓存
+node_modules/
+.cache/
+*.log
+
+# 抓取的页面快照与产物（版权原因不入库）
+test/fixtures/
+test/**/*.html
+
+# 用例跑出来的截图，每次重跑都会重写
+test/*.png
+
+# 下载产物示例
+out/
+output/
+
+# 系统噪音
+.DS_Store
+Thumbs.db
+desktop.ini

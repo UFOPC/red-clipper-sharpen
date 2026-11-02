@@ -1,0 +1,112 @@
+{
+   "action": {
+      "default_icon": {
+         "16": "icons/icon16.png",
+         "32": "icons/icon32.png",
+         "48": "icons/icon48.png",
+         "128": "icons/icon128.png"
+      },
+      "default_title": "小红虾 · 下载助手",
+      "default_popup": "setting.html"
+   },
+   "options_ui": {
+      "page": "setting.html",
+      "open_in_tab": true
+   },
+   "author": "AiNoMad",
+   "background": {
+      "service_worker": "js/background.js",
+      "type": "module"
+   },
+   "content_scripts": [
+      {
+         "css": [
+            "content/index.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/format-size.js",
+            "content/index.js"
+         ],
+         "matches": [
+            "*://*.xiaohongshu.com/*"
+         ],
+         "run_at": "document_start"
+      },
+      {
+         "css": [
+            "content/chiphell.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/chiphell.js"
+         ],
+         "matches": [
+            "*://www.chiphell.com/*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "css": [
+            "content/sspai.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/sspai.js"
+         ],
+         "matches": [
+            "*://sspai.com/*",
+            "*://www.sspai.com/*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "css": [
+            "content/smzdm.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/smzdm.js"
+         ],
+         "matches": [
+            "*://post.smzdm.com/p/*"
+         ],
+         "run_at": "document_idle"
+      }
+   ],
+   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell 帖子图片、少数派文章、什么值得买文章，保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
+   "host_permissions": [
+      "*://*.xiaohongshu.com/*",
+      "*://cdnfile.sspai.com/*",
+      "*://cdn-static.sspai.com/*"
+   ],
+   "icons": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqj+2eJDdnJ0P9WrhtiAZ3mV6Jd8gL9wUYX4cFHOHVe51v1XSBAdAJZgqy8cn7QjVnaTVaduwHlkFdJWLlKVK0mdpPdHty2uNRwNF0TPB9U+k+I1gJvdVy3ay0SPWIUFGw5OH08Eheg6kpHIM2jegPLRRJxUdKXxjZA5FdjkquttlMe+fcoxaGOSTK1GVUZ6SZilH7jQqYTDHxSpl6K/Nq+EYXoEIFy38mRu7D/xH+gi0iVk/BP15k7ZJ5zTTQ3QBTWV4s3/8c7TRwY3+P7efxRH4dBqwT3vFLrVaZtNUiWMnz4+QbvM0ink1Y9b/4Ukk07qYooaxIo2nIFHtelHVCQIDAQAB",
+   "manifest_version": 3,
+   "name": "小红虾 · 下载助手",
+   "permissions": [
+      "downloads",
+      "scripting",
+      "storage"
+   ],
+   "version": "0.6.1",
+   "web_accessible_resources": [
+      {
+         "matches": [
+            "*://*.xiaohongshu.com/*",
+            "*://www.chiphell.com/*",
+            "*://sspai.com/*",
+            "*://www.sspai.com/*",
+            "*://post.smzdm.com/*"
+         ],
+         "resources": [
+            "icons/icon.svg"
+         ]
+      }
+   ]
+}

@@ -1,0 +1,26 @@
+小红虾 · 下载助手 (Red Clipper Sharpen)
+Copyright 2026 AiNoMad
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+范围 / Scope
+------------
+本授权覆盖本仓库内全部文件：
+
+  manifest.json
+  setting.html
+  js/*
+  content/*
+  icons/*
+  test/*
+  README.md
+
+第三方依赖 / Third-party dependencies
+-------------------------------------
+无。运行时不加载任何外部库，也没有打包产物；全部代码为可读源码，直接由浏览器加载执行。
+
+图标与本项目全部代码、样式均为原创。
+
+联系 / Contact
+--------------
+如对本仓库的任何内容有异议，请通过 Issue 联系，将立即处理。

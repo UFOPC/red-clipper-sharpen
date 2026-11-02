@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">小红虾</title>
+  <defs>
+    <mask id="cutouts">
+      <rect width="128" height="128" fill="#fff"/>
+      <g transform="translate(64 64) scale(1.42) translate(-63.5 -66.5)">
+        <circle cx="75" cy="49" r="4.5" fill="#000"/>
+        <path d="M30 62L46 65M30 80L45 76M43 98L51 85" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </mask>
+  </defs>
+  <g mask="url(#cutouts)" transform="translate(64 64) scale(1.42) translate(-63.5 -66.5)">
+    <g fill="#EF493D">
+      <path d="M86 47C73 33 50 34 36 48C20 64 23 86 39 97C55 108 77 100 81 85C70 93 57 91 50 83C41 73 45 61 56 58C61 57 65 59 69 64L92 58Z"/>
+      <path d="M78 85C77 74 84 66 94 65C98 78 92 89 81 93Z"/>
+      <path d="M82 90C92 84 102 86 107 94C100 105 89 106 80 97Z"/>
+    </g>
+    <path d="M77 43C87 26 98 25 106 29M80 44C93 35 101 37 106 42" fill="none" stroke="#EF493D" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>
