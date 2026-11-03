@@ -5,6 +5,8 @@
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
+**中文** · [English](./README.en.md)
+
 ---
 
 ## 它解决什么问题
