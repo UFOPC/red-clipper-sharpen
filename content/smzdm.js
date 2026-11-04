@@ -289,20 +289,25 @@
     const withMedia = options.withMedia !== false;
     const withComments = !!options.withComments;
     const pick = options.mode === "small" ? "small" : "big";
-    const dir = RN.dir(info.title, info.nick);
-    const stem = RN.base(info.title, info.nick, info.time);
-    const prefix = dir ? dir + "/" : "";
+    const layout = RN.layout(info.title, info.nick, info.time);
     const total = info.media.length;
     const names = new Array(total);
     const srcs = new Array(total);
     const failed = [];
+    let imageIndex = 0;
+    let videoIndex = 0;
 
     /* 一、先定名字。扩展名只看地址（_e1080/.png 这类），不必等字节回来。 */
     for (let j = 0; j < total; j++) {
       const item = info.media[j];
       /* 选了「跳过」就一个都不抓：names 全空，md 里按索引替换占位符时媒体整段消失 */
       if (!withMedia) break;
-      names[j] = stem + "-" + (j + 1) + (item.video ? ".mp4" : sourceExt(item.url));
+      names[j] = RN.mediaPath(
+        layout.mediaStem,
+        item.video ? ++videoIndex : ++imageIndex,
+        item.video ? ".mp4" : sourceExt(item.url),
+        item.video
+      );
       /* 视频没有 1080/710 两档，地址是签名过的原始文件，改写只会把它弄坏 */
       srcs[j] = item.video ? "" : tierUrl(item.url, pick);
     }
@@ -354,7 +359,7 @@
      * 媒体那一步再出错也不该影响已经落地的 md，所以单独 try。 */
     await chrome.runtime.sendMessage({
       type: "downloadFiles",
-      data: { files: [{ filename: prefix + stem + ".md", text: md, mime: "text/markdown" }] },
+      data: { files: [{ filename: layout.md, text: md, mime: "text/markdown" }] },
     });
 
     /* 四、再发媒体。 */
@@ -365,7 +370,7 @@
           const batch = [];
           for (let j = i; j < Math.min(i + BATCH, total); j++) {
             if (!srcs[j]) continue;
-            batch.push({ filename: prefix + names[j], url: srcs[j] });
+            batch.push({ filename: layout.prefix + names[j], url: srcs[j] });
           }
           if (batch.length) {
             await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
@@ -377,7 +382,7 @@
         console.warn("小红虾 · 媒体下发中断（md 已落地）", e);
       }
     }
-    return { media: withMedia ? total : 0, md: stem + ".md" };
+    return { media: withMedia ? total : 0, md: layout.md };
   }
 
   /* ---------- UI ---------- */

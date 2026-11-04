@@ -2,7 +2,7 @@
 
 > A Chrome / Edge extension (Manifest V3) that saves Xiaohongshu notes, Chiphell threads, SSPAI articles,
 > and SMZDM (smzdm.com) articles — together with their images, videos, and comments — as a Markdown file
-> with YAML frontmatter plus the media files in the same folder.
+> with YAML frontmatter plus media organized into dedicated folders.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
@@ -26,7 +26,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 | Images | Saved in body order; extensions are inferred from the **real MIME type**, not guessed from the URL suffix |
 | Video | Xiaohongshu videos are selectable by quality tier; SMZDM in-page videos are saved after decrypting their hotlink protection |
 | Comments | Optional "Body + Comments"; floor number, IP location, like count, and reply-to target are all preserved |
-| Naming | `<author>/<title>/YYYY.MM.DD_<title>_<author>.md`, illegal characters replaced, no cross-platform oddities |
+| Naming | `<title>/YYYY.MM.DD_<title>_<author>-.md`; whitespace and brackets from titles stay out of paths, the author remains only in the Markdown filename, and untitled posts go into `未命名文件_<author>_<date>/` to separate different authors and publication dates |
 
 ## Supported sites
 
@@ -68,12 +68,20 @@ This extension does exactly one thing: **click once on the page, and get a folde
 ## Output layout
 
 ```
-Jane Doe/
-└── S101 Canyon Weekend/
-    ├── 2026.08.03_S101 Canyon Weekend_Jane Doe.md
-    ├── 2026.08.03_S101 Canyon Weekend_Jane Doe-1.png
-    └── 2026.08.03_S101 Canyon Weekend_Jane Doe-2.mp4
+S101CanyonWeekend/
+├── 2026.08.03_S101CanyonWeekend_Jane Doe-.md
+├── 2026.08.03_S101CanyonWeekend-comments.json
+├── images/
+│   ├── 2026.08.03_S101CanyonWeekend-01.png
+│   └── 2026.08.03_S101CanyonWeekend-02.jpg
+├── media/
+│   └── 2026.08.03_S101CanyonWeekend-01.mp4
+└── comments/
+    ├── 2026.08.03_S101CanyonWeekend-01-c1.png
+    └── 2026.08.03_S101CanyonWeekend-01-c2.png
 ```
+
+All four sites use this layout. In the `comments/` examples, `01` identifies the owning top-level comment and is inherited by nested replies; `cN` is a global comment-image counter for the whole post and never resets within an individual comment.
 
 ```yaml
 ---
@@ -92,9 +100,10 @@ It describes **the note itself** and does not change with save options like "Ski
 
 ### Two invariants
 
-1. **The number of `![N](./…)` references in the body == the number of media files in the same folder == the count shown on the panel.** Any mismatch is a bug.
-2. **Relative paths in the `.md` must be valid URIs.** A title with spaces produces a filename with spaces, and a CommonMark link destination is truncated at whitespace —
-   `![1](./a b.png)` renders as plain text and no image shows up. Paths are therefore escaped as `%20`, `%28`, and so on.
+1. **Body reference count == body-media file count across `images/` + `media/` == the count shown on the panel.** Any mismatch is a bug.
+   Comment images under `comments/` are excluded from this equation; they have their own references immediately after the corresponding comment text. Each referenced video produces one primary file, so alternative quality tiers or original-video copies do not distort the count.
+2. **Relative paths in the `.md` must be valid URIs.** Whitespace and brackets are removed from title-derived path segments, but other fragments such as author names may still contain them.
+   CommonMark link destinations can be truncated or broken by those characters, so references into `images/`, `media/`, and `comments/` are still URI-escaped.
    (`encodeURIComponent` cannot be used: it leaves `( ) ' ! *` untouched, and a parenthesis in the path breaks the link just the same.)
 
 ## Site-specific gotchas (field notes)

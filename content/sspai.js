@@ -5,6 +5,7 @@
  *   作者   JSON-LD author.name，回落作者头像 img[alt]
  *   日期   .article__header__date 形如「2026年10月28日」
  *   正文   .article__main__content（wangEditor 容器），回落 .article-body
+ *   挂载   普通文章用 .article__header__*；重要文章用右侧作者栏 .article__important__header__side
  *   图片   <figure class="image ss-img-wrapper"><img src="…w/1120…" data-original="…?imageView2/2/format/webp">
  *          data-original 带的是 CDN 转码指令，去掉才拿到作者上传的原文件；
  *          src 是站方在页面里实际提供的那份（1120 宽 + webp），体积更小
@@ -264,9 +265,7 @@
     const withComments = !!options.withComments;
     const pick = options.mode === "small" ? "small" : "origin";
     if (withComments) await loadAllComments();
-    const dir = RN.dir(info.title, info.nick);
-    const stem = RN.base(info.title, info.nick, info.time);
-    const prefix = dir ? dir + "/" : "";
+    const layout = RN.layout(info.title, info.nick, info.time);
     const total = info.images.length;
     const names = new Array(total);
     let done = 0;
@@ -292,8 +291,8 @@
         } catch (e) {
           // 抓不到就退回原地址，让下载器自己再试一次
         }
-        names[j] = stem + "-" + (j + 1) + ext;
-        batch.push({ filename: prefix + names[j], url });
+        names[j] = RN.mediaPath(layout.mediaStem, j + 1, ext);
+        batch.push({ filename: layout.prefix + names[j], url });
       }
       await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
       done += batch.length;
@@ -335,9 +334,9 @@
 
     await chrome.runtime.sendMessage({
       type: "downloadFiles",
-      data: { files: [{ filename: prefix + stem + ".md", text: md, mime: "text/markdown" }] },
+      data: { files: [{ filename: layout.md, text: md, mime: "text/markdown" }] },
     });
-    return { images: withMedia ? total : 0, md: stem + ".md" };
+    return { images: withMedia ? total : 0, md: layout.md };
   }
 
   /* ---------- UI ---------- */
@@ -483,9 +482,12 @@
 
   function findAnchor() {
     return (
+      document.querySelector(".article__important__header__side") ||
       document.querySelector(".article__header__footer") ||
       document.querySelector(".article__header__content") ||
-      document.querySelector(".article__header")
+      document.querySelector(".article__header") ||
+      // 重要文章等新版式可能整组换 class；标题父容器是最后的通用挂载点。
+      document.querySelector("#article-title")?.parentElement
     );
   }
 

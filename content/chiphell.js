@@ -262,9 +262,7 @@
 
   async function build(options = prefs) {
     const { articlePosts, comments, meta } = await collectAll(options);
-    const stem = RN.base(meta.title, meta.author, meta.timeMs);
-    const dir = RN.dir(meta.title, meta.author);
-    const prefix = dir ? dir + "/" : "";
+    const layout = RN.layout(meta.title, meta.author, meta.timeMs);
     const media = [];
     const byUrl = new Map();
     const imageMd = (url) => {
@@ -273,12 +271,12 @@
         byUrl.set(url, media.length);
       }
       const index = byUrl.get(url);
-      return `![${index}](${RN.rel(stem + "-" + index + extOf(url))})`;
+      return `![${index}](${RN.rel(RN.mediaPath(layout.mediaStem, index, extOf(url)))})`;
     };
     const onImage = options.media ? imageMd : null;
     const body = articlePosts.map((post) => postBody(post, onImage)).filter(Boolean).join("\n\n").trim();
     const files = media.map((url, index) => ({
-      filename: prefix + stem + "-" + (index + 1) + extOf(url),
+      filename: layout.prefix + RN.mediaPath(layout.mediaStem, index + 1, extOf(url)),
       url,
     }));
 
@@ -302,7 +300,7 @@
     if (commentsText) parts.push(commentsText, "");
 
     const markdown = parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
-    files.push({ filename: prefix + stem + ".md", text: markdown, mime: "text/markdown" });
+    files.push({ filename: layout.md, text: markdown, mime: "text/markdown" });
     return { files, mediaCount: media.length, commentCount: comments.length };
   }
 

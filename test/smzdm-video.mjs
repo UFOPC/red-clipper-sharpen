@@ -11,7 +11,7 @@
  *   ② 视频先在本页 fetch（带 Referer）拿字节，下载器收到的是 data: URL
  *      —— 这里把 CDN 做成「没 Referer 就 403」，正是线上「没有权限，无法下载」的成因
  *   ③ 签名参数原样保留，不能被任何改写碰到
- *   ④ md 里视频走图片语法 ![](./<stem>-N.mp4)，Obsidian 按扩展名渲染成播放器
+ *   ④ md 里视频走图片语法 ![](./media/<stem>-NN.mp4)，Obsidian 按扩展名渲染成播放器
  */
 import { createRequire } from "node:module";
 import fs from "node:fs";
@@ -152,11 +152,11 @@ ok(
   videoHits.length >= 1 && videoHits.every((hit) => hit === "with-referer"),
   `请求 CDN 时都带着 Referer（实际 ${JSON.stringify(videoHits)}）`
 );
-ok(video && /-2\.mp4$/.test(video.filename), `视频排在图片之后，编号 2（${video && video.filename}）`);
+ok(video && /\/media\/.*-01\.mp4$/.test(video.filename), `视频进 media/，视频序号独立从 01 开始（${video && video.filename}）`);
 const image = media.find((f) => !/\.mp4$/.test(f.filename));
 ok(
-  image && image.url.includes("_e1080.") && /-1\.png$/.test(image.filename),
-  `图片仍走 1080 档、编号 1，扩展名取源扩展名 .png（${image && image.filename}）`
+  image && image.url.includes("_e1080.") && /\/images\/.*-01\.png$/.test(image.filename),
+  `图片进 images/、编号 01，扩展名取源扩展名 .png（${image && image.filename}）`
 );
 
 console.log("\n[3] Markdown 里视频用图片语法引用");
@@ -164,9 +164,9 @@ const md = mdFile ? mdFile.text : "";
 ok(!md.includes("\u0000"), "占位符全部替换掉了");
 const first = md.indexOf("](./");
 const second = md.indexOf("](./", first + 1);
-ok(/^\]\(\.\/[^)]*-1\.png\)$/.test(md.slice(first, md.indexOf(")", first) + 1)), `第一个引用是图片（${md.slice(first, md.indexOf(")", first) + 1)}）`);
-ok(md.slice(second).startsWith("](./") && /\]\(\.\/[^)]*\.mp4\)/.test(md.slice(second, second + 200)),
-  `第二个引用是视频（${md.slice(second, second + 60)}）`);
+ok(/^\]\(\.\/images\/[^)]*-01\.png\)$/.test(md.slice(first, md.indexOf(")", first) + 1)), `第一个引用是 images/ 下的图片（${md.slice(first, md.indexOf(")", first) + 1)}）`);
+ok(md.slice(second).startsWith("](./media/") && /\]\(\.\/media\/[^)]*\.mp4\)/.test(md.slice(second, second + 200)),
+  `第二个引用是 media/ 下的视频（${md.slice(second, second + 60)}）`);
 ok(md.includes("第一段正文") && md.includes("最后一段正文"), "视频卡前后的正文都在");
 ok(!md.includes("视频卡片（"), "取到地址时不该留下「未取到播放地址」的提示");
 ok(!md.includes("剪藏") && !md.includes("保存文章"), "插件自己的按钮与面板不能漏进正文");

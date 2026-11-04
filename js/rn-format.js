@@ -1,6 +1,7 @@
 /* Rednote-Sharpen 命名与 Markdown 规范（供 background service worker 与 content scripts 共用）
- * 目录：<作者>/<标题>/
- * 文件：<YYYY.MM.DD_标题_作者>.md；媒体 <stem>-N.ext；评论 <stem>-comments.json（全部平铺在该目录下，无子目录）
+ * 目录：<标题>/，无标题时使用 未命名文件_<作者>_<发布日期>/；标题中的空白与括号不进目录名或文件名。
+ * 文件：MD <YYYY.MM.DD_标题_作者>-.md；评论 <YYYY.MM.DD_标题>-comments.json。
+ * 媒体：images|media/<YYYY.MM.DD_标题>-NN.ext；评论图 comments/<YYYY.MM.DD_标题>-NN-cN.ext。
  * MD：frontmatter(来源/作者/时间/类型/链接/tags) + # 标题 + 正文 + ![N](./N.ext)；视频同用图片语法，Obsidian 按扩展名渲染成可播放的播放器
  */
 (() => {
@@ -26,6 +27,9 @@
     return text;
   }
 
+  // 标题里的空白与括号只制造路径噪音；作者名仍按 name() 的通用规则处理。
+  const TITLE_NOISE = /[\s()（）\[\]【】{}｛｝]/g;
+  const titleName = (value) => name(value).replace(TITLE_NOISE, "");
   const pad = (n) => (n < 10 ? "0" + n : String(n));
 
   function dateParts(ms) {
@@ -37,18 +41,48 @@
   }
 
   function base(title, nick, ms) {
-    return [dateParts(ms).date, name(title), name(nick)].filter(Boolean).join("_");
+    return [dateParts(ms).date, titleName(title), name(nick)].filter(Boolean).join("_");
   }
 
-  function dir(title, nick) {
-    return [name(nick), name(title)].filter(Boolean).join("/");
+  function assetBase(title, ms) {
+    return [dateParts(ms).date, titleName(title)].filter(Boolean).join("_");
+  }
+
+  function dir(title, nick, ms) {
+    const clean = titleName(title);
+    if (clean) return clean;
+    return "未命名文件_" + (name(nick) || "未知作者") + "_" + dateParts(ms).date;
+  }
+
+  /* 四站共用同一组路径，不再各自拼作者目录或媒体文件名。
+   * MD 主干含作者并保留结尾连字符；其余产物一律使用不带作者的 mediaStem。 */
+  function layout(title, nick, ms) {
+    const named = !!(titleName(title) || name(nick));
+    const stem = named ? base(title, nick, ms) : "未命名文件";
+    const mediaStem = named ? assetBase(title, ms) : "未命名文件";
+    const directory = dir(title, nick, ms);
+    const prefix = directory ? directory + "/" : "";
+    return {
+      prefix,
+      stem,
+      mediaStem,
+      md: prefix + stem + "-.md",
+      comments: prefix + mediaStem + "-comments.json",
+    };
+  }
+
+  function mediaPath(stem, index, extension, video = false) {
+    return (video ? "media/" : "images/") + stem + "-" + pad(index) + extension;
+  }
+
+  function commentPath(stem, root, index, extension) {
+    return "comments/" + stem + "-" + pad(root) + "-c" + index + extension;
   }
 
   /* md 里的相对路径必须写成合法 URI，否则渲染器不认。
-   * 标题带空格时文件名也跟着带（name() 只把连续空白压成一个，不会删掉），而 CommonMark
-   * 的链接目标遇到空格就截断——`![1](./2026.08.03_S101 峡谷_张三-1.png)` 会原样显示成文字，
-   * 图片一张都不出来。实测 markdown-it/CommonMark 都是这个行为，改成 %20 或 <...> 才认。
-   * 这里只转义会破坏目标的那几个字符，中文和全角标点保持可读。 */
+   * 标题中的空白与括号已在 titleName() 去掉，但作者名等其余片段仍可能带这些字符；
+   * CommonMark 的链接目标遇到空格会截断，括号也可能拆坏目标，所以这里仍统一转义。
+   * 中文和全角标点保持可读。 */
   const REL_UNSAFE = /[ %#?()<>[\]"'`\\]/g;
   /* 不能用 encodeURIComponent：它对 ( ) ' ! * 一个都不转，括号留下照样把链接拆坏 */
   const relEscape = (ch) => "%" + ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
@@ -223,5 +257,5 @@
     return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
-  globalThis.__RN = { name, dateParts, base, dir, rel, kindOf, markdown, frontmatter, videoOptions, pickDefaultQuality, commentsMarkdown };
+  globalThis.__RN = { name, dateParts, base, assetBase, dir, layout, mediaPath, commentPath, rel, kindOf, markdown, frontmatter, videoOptions, pickDefaultQuality, commentsMarkdown };
 })();

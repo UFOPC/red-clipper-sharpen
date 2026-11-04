@@ -230,13 +230,14 @@ const refJpg = refs.filter((r) => /\.jpg\)$/.test(r)).length;
 ok(refPng === 64 && refJpg === 1, `引用扩展名与真实字节一致：64 .png + 1 .jpg（实际 ${refPng}/${refJpg}）`);
 ok(
   refs.every((r) => /\d+\.(png|jpg)\)$/.test(r)),
-  "引用形如 ./<stem>-N.<ext>"
+  "引用形如 ./images/<stem>-NN.<ext>"
 );
-/* 规范是「媒体全部平铺在该目录下、无子目录」，所以引用里不该出现路径分隔符，
- * 且必须共用同一个 <YYYY.MM.DD_标题_作者> 前缀 */
-const stems = new Set(refs.map((r) => r.replace(/^!\[\d+\]\(\.\//, "").replace(/-\d+\.(png|jpg)\)$/, "")));
+const stems = new Set(refs.map((r) => r.replace(/^!\[\d+\]\(\.\/images\//, "").replace(/-\d+\.(png|jpg)\)$/, "")));
 ok(stems.size === 1, `65 张图共用同一 stem（${[...stems][0] || "无"}）`);
-ok(refs.every((r) => !r.replace(/^!\[\d+\]\(\.\//, "").includes("/")), "引用无子目录，全部平铺");
+ok(refs.every((r) => r.startsWith("![") && r.includes("](./images/")), "正文图片引用全部进入 images/");
+ok(![...stems].some((stem) => stem.includes("大胃王DAVID")), "正文媒体 stem 不含作者名");
+/* 这个环境里的 chrome.downloads 落盘为 GUID（见上方说明），不能拿磁盘文件名反推 suggested filename；
+ * 下载路径由 one-click.mjs 在消息层断言，这里只交叉核对真实字节与 md 引用。 */
 ok(md.includes("## 引言："), "h2 转成二级标题");
 ok(md.includes("### 1、分辨率和尺寸"), "h3 转成三级标题");
 ok(md.includes("> 商品卡片"), "商品卡片留了记号");
@@ -259,7 +260,11 @@ if (extId) {
     (await opt.locator("#site-count").textContent()) === "4",
     "站点计数由列表数出来，不会与文案漂移"
   );
-  ok((await opt.locator("#version").textContent()) === "v0.6.1", "版本号是 0.6.1");
+  ok((await opt.locator("#version").textContent()) === "v0.6.2", "版本号是 0.6.2");
+  const tree = await opt.locator('section[aria-label="下载目录结构"] pre').textContent();
+  ok(tree.includes("标题/") && !tree.includes("作者 / 标题"), "设置页目录树不再展示作者一级目录");
+  ok(tree.includes("images/") && tree.includes("media/") && tree.includes("comments/"), "设置页展示三个真实媒体子目录");
+  ok(tree.includes("_作者-.md") && tree.includes("-comments.json") && tree.includes("-01-c1.png"), "设置页文件名示例与真实命名一致");
   await opt.close();
 } else {
   ok(false, "未拿到扩展 id，跳过设置页检查");

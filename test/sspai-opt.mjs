@@ -59,6 +59,22 @@ const html = `<!doctype html><meta charset="utf-8">
 <script>${read("js/rn-format.js")}</script>
 <script>${read("content/sspai.js")}</script>`;
 
+/* 118263 的重要文章版式：整组 article__header__* 换成 article__important__header__*。
+ * 不保存真实文章快照，用最小 DOM 锁住挂载条件。 */
+const importantHtml = html.replace(
+  /<header class="article__header">[\s\S]*?<\/header>/,
+  `<div class="article__important__header article__important__header--animated">
+    <div class="article__important__header__inner">
+      <div class="article__important__header__content">
+        <div class="article__important__header__main">
+          <h1 id="article-title" class="article__important__header__title article__important__header__title--split">重要文章标题</h1>
+        </div>
+        <div class="article__important__header__side"><div class="article__important__header__author">作者甲</div></div>
+      </div>
+    </div>
+  </div>`
+);
+
 // 1x1 PNG，够 deliver 走完 fetch → blob → data: URL
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -196,6 +212,36 @@ async function runDownload(expect = 2) {
     return msg ? msg.data.files[0].text : "";
   });
   ok(!!md && !/!\[/.test(md), `md 里没有图片引用（${md.length} 字符）`);
+}
+
+/* ⑦ 重要文章版式（post/118263）：没有旧 header 也必须出现剪藏按钮并正确读图数。 */
+{
+  const important = await browser.newPage();
+  await important.route("https://sspai.com/post/118263", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: importantHtml })
+  );
+  await important.goto("https://sspai.com/post/118263", { waitUntil: "load" });
+  await important.waitForSelector(".sspai-xhx-slot", { timeout: 5000 });
+  await important.hover(".sspai-xhx-slot");
+  await important.waitForFunction(() => document.querySelector(".sspai-xhx-qhead .cnt")?.textContent === "3 张", null, {
+    timeout: 5000,
+  });
+  const mounted = await important.evaluate(() => {
+    const side = document.querySelector(".article__important__header__side");
+    const style = side ? getComputedStyle(side) : null;
+    return {
+      visible: !!document.querySelector(".sspai-xhx-entry")?.offsetWidth,
+      parent: document.querySelector(".sspai-xhx-slot")?.parentElement?.className || "",
+      count: document.querySelector(".sspai-xhx-qhead .cnt")?.textContent || "",
+      sidePosition: style ? style.position : "",
+      sideZ: style ? style.zIndex : "",
+    };
+  });
+  ok(mounted.visible, "重要文章版式显示剪藏按钮");
+  ok(mounted.parent.includes("article__important__header__side"), `按钮挂进重要文章右侧作者栏（${mounted.parent}）`);
+  ok(mounted.count === "3 张", `重要文章仍正确读取正文图片数（${mounted.count}）`);
+  ok(mounted.sidePosition === "relative" && mounted.sideZ === "2", `重要文章侧栏提升层级，面板不会被 Banner 盖住（${mounted.sidePosition}/${mounted.sideZ}）`);
+  await important.close();
 }
 
 await browser.close();

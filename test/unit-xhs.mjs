@@ -94,13 +94,28 @@ const baseNote = {
     { infoList: [{ imageScene: "FD_PRV_WEBP", url: "https://sns-webpic-qc.xhscdn.com/spectrum/1000/b!x" }], width: 200 },
   ],
 };
+const picture = (url) => ({ infoList: [{ imageScene: "FD_PRV_WEBP", url }] });
 const comments = [{
   id: "comment1",
   content: "评论[赞]",
   createTime: 1762000001000,
   ipLocation: "上海",
   userInfo: { userId: "reader", nickname: "读者" },
-  pictures: [{ infoList: [{ imageScene: "FD_PRV_WEBP", url: "https://cdn.test/comment.png" }] }],
+  pictures: [picture("https://cdn.test/comment-1.png")],
+  subComments: [{
+    id: "reply1",
+    content: "二级回复",
+    createTime: 1762000002000,
+    userInfo: { userId: "replier", nickname: "回复者" },
+    pictures: [picture("https://cdn.test/comment-2.png")],
+    subComments: [],
+  }],
+}, {
+  id: "comment2",
+  content: "第二条一级评论",
+  createTime: 1762000003000,
+  userInfo: { userId: "reader2", nickname: "读者二" },
+  pictures: [picture("https://cdn.test/comment-3.png")],
   subComments: [],
 }];
 
@@ -112,12 +127,27 @@ await route({ type: "clearData" });
 await route({ type: "saveData", downloadId: "note1", withComment: true, rnOnly: true });
 const withComments = values.get("note1:rn").files;
 const media = withComments.filter((file) => file.url);
+const bodyMedia = media.filter((file) => /\/(?:images|media)\//.test(file.filename));
+const commentMedia = media.filter((file) => file.filename.includes("/comments/"));
 const markdownFile = withComments.find((file) => file.mime === "text/markdown");
-assert.equal(media.length, 3, "两张笔记图和一张评论图都应入清单");
-assert.equal((markdownFile.text.match(/!\[\d+\]/g) || []).length, 2, "正文媒体引用数必须等于笔记媒体数");
+assert.equal(media.length, 5, "两张正文图和三张评论图都应入清单");
+assert.equal(bodyMedia.length, 2, "images/ 与 media/ 只收正文媒体");
+assert.equal(commentMedia.length, 3, "comments/ 收全部一级、二级评论图");
+assert.equal((markdownFile.text.match(/!\[\d+\]/g) || []).length, 2, "正文媒体引用数必须等于正文媒体文件数");
 assert.ok(markdownFile.text.includes("\n类型: 图文\n"), "只有图时类型是「图文」");
-assert.ok(withComments.some((file) => file.filename.endsWith("-comments.json")), "评论 JSON 必须入清单");
-assert.ok(markdownFile.filename.startsWith("作者/标题/"), "目录必须沿用 RN 命名");
+assert.ok(withComments.some((file) => file.filename === "标题/2025.11.01_标题-comments.json"), "评论 JSON 必须落在标题目录根部");
+assert.equal(markdownFile.filename, "标题/2025.11.01_标题_作者-.md", "取消作者目录，MD 保留作者与结尾连字符");
+assert.deepEqual(bodyMedia.map((file) => file.filename), [
+  "标题/images/2025.11.01_标题-01.webp",
+  "标题/images/2025.11.01_标题-02.jpg",
+]);
+assert.deepEqual(commentMedia.map((file) => file.filename), [
+  "标题/comments/2025.11.01_标题-01-c1.png",
+  "标题/comments/2025.11.01_标题-01-c2.png",
+  "标题/comments/2025.11.01_标题-02-c3.png",
+], "二级评论继承一级评论序号，cN 全局递增且不撞名");
+assert.equal(new Set(commentMedia.map((file) => file.filename)).size, 3, "评论图路径必须唯一");
+assert.ok(commentMedia.every((file) => !file.filename.includes("-00-")), "root 不得因 saveData 丢字段而落入 00 段");
 // 评论区必须是二级标题：与三站 RN.commentsMarkdown 的产物同构。
 // 只断言 includes("# 评论") 对 "## 评论" 也成立，拦不住层级漂移，所以按行锚定。
 assert.ok(markdownFile.text.includes("\n## 评论\n"), "评论区应为二级标题");
@@ -130,8 +160,12 @@ assert.ok(
   "评论应为「1. **作者** · 时间 · IP」的有序列表项"
 );
 assert.ok(
-  /^ {3}.*!\[\]\(\.\/.*-3\.png\)$/m.test(markdownFile.text),
-  "评论配图挂在正文下方，用相对路径引用"
+  /^ {3}.*!\[\]\(\.\/comments\/2025\.11\.01_标题-01-c1\.png\)$/m.test(markdownFile.text),
+  "一级评论配图挂在评论文字后，并引用 comments/ 下的真实路径"
+);
+assert.ok(
+  markdownFile.text.includes("![](./comments/2025.11.01_标题-01-c2.png)"),
+  "二级评论引用所属一级评论 01 段的全局第 2 张图"
 );
 assert.ok(!markdownFile.text.includes("#tag[话题]#"), "话题标记应从正文删除");
 assert.ok(media[1].url.startsWith("https://sns-img-bd.xhscdn.com/b?imageView2/2/w/200/format/jpg"));
@@ -167,10 +201,21 @@ assert.equal(values.get("note1:rn").files[0].url, "https://cdn.test/1440.mp4", "
 await route({ type: "saveData", downloadId: "note1", rnOnly: true, videoUrl: "https://cdn.test/720.mp4" });
 assert.equal(values.get("note1:rn").files[0].url, "https://cdn.test/720.mp4", "面板档位必须覆盖后台默认档");
 
+setState({ ...videoNote, imageList: [baseNote.imageList[0]] });
+await route({ type: "saveData", downloadId: "note1", rnOnly: true });
+const mixed = values.get("note1:rn").files;
+assert.deepEqual(mixed.filter((file) => file.url).map((file) => file.filename), [
+  "标题/images/2025.11.01_标题-01.webp",
+  "标题/media/2025.11.01_标题-01.mp4",
+], "正文图片与视频分目录并各自从 01 编号");
+const mixedMd = mixed.find((file) => file.mime === "text/markdown").text;
+assert.equal((mixedMd.match(/!\[\d+\]/g) || []).length, 2, "一图一视频有两条正文引用");
+assert.ok(mixedMd.includes("\n类型: 图文+视频\n"), "评论图不进入正文类型与媒体计数");
+
 downloads.length = 0;
 await route({
   type: "downloadUrl",
-  data: { url: "https://cdn.test/origin.mp4", filename: "作者/标题/a.mp4", mdFilename: "作者/标题/a.md", md: "# 标题" },
+  data: { url: "https://cdn.test/origin.mp4", filename: "标题/media/a.mp4", mdFilename: "标题/a.md", md: "# 标题" },
 });
 assert.equal(downloads.length, 2, "原视频与 Markdown 应依次下载");
 assert.ok(downloads[1].url.startsWith("data:text/markdown;charset=utf-8,"));
@@ -189,17 +234,31 @@ await pending;
 extractionGate = null;
 assert.equal(values.has("note1:rn"), false, "取消后不得写入暂存清单");
 
-/* 标题带空格时，文件名也带空格，md 里的引用必须转义成 %20。
- * 这是「图片没排进去」的成因：CommonMark 的链接目标遇到空格就截断，整行原样显示成文字。 */
-setState({ ...baseNote, title: "标题 带 空格" });
+/* 标题里的空白与半角/全角括号不得进入目录或文件名；MD 正文标题仍保留原文。 */
+setState({ ...baseNote, title: "标题 （带） [空格]" });
 await route({ type: "clearData" });
 await route({ type: "saveData", downloadId: "note1", rnOnly: true });
-const spaced = values.get("note1:rn").files.find((file) => file.mime === "text/markdown").text;
-const imageLines = spaced.split("\n").filter((line) => line.startsWith("!["));
+const cleanedFiles = values.get("note1:rn").files;
+const cleanedMd = cleanedFiles.find((file) => file.mime === "text/markdown");
+const imageLines = cleanedMd.text.split("\n").filter((line) => line.startsWith("!["));
 assert.equal(imageLines.length, 2, "两张图都要有引用");
 assert.ok(imageLines.every((line) => !line.includes(" ")), "引用里不能留裸空格：" + imageLines[0]);
-assert.ok(imageLines.every((line) => line.includes("标题%20带%20空格")), "空格应转成 %20：" + imageLines[0]);
-assert.ok(decodeURIComponent(imageLines[0].slice(imageLines[0].indexOf("(") + 1, -1)).includes("标题 带 空格_作者-1."),
-  "反转义要能还原成磁盘上的文件名");
+assert.ok(imageLines.every((line) => line.includes("images/2025.11.01_标题带空格-")), "标题应去掉空白与括号：" + imageLines[0]);
+assert.ok(cleanedFiles.every((file) => file.filename.startsWith("标题带空格/")), "所有产物只落在清洗后的标题目录");
+assert.equal(cleanedMd.filename, "标题带空格/2025.11.01_标题带空格_作者-.md");
+assert.ok(cleanedMd.text.includes("# 标题 （带） [空格]"), "清洗只作用于路径，不改 MD 里的原始标题");
+
+/* 无标题笔记使用作者与发布日期兜底目录，不能散落下载根目录。 */
+setState({ ...baseNote, title: "" });
+await route({ type: "clearData" });
+await route({ type: "saveData", downloadId: "note1", rnOnly: true });
+const untitled = values.get("note1:rn").files;
+assert.ok(untitled.every((file) => file.filename.startsWith("未命名文件_作者_2025.11.01/")), "无标题时所有产物进入带作者和日期的兜底目录");
+assert.deepEqual(untitled.map((file) => file.filename), [
+  "未命名文件_作者_2025.11.01/images/2025.11.01-01.webp",
+  "未命名文件_作者_2025.11.01/images/2025.11.01-02.jpg",
+  "未命名文件_作者_2025.11.01/2025.11.01_作者-.md",
+]);
+assert.ok(untitled[2].text.includes("# 未命名文件"), "无标题时正文 H1 使用同一个兜底名");
 
 console.log("✓ unit-xhs: 取数、组装、评论、清晰度、原视频、下载与取消全部通过");

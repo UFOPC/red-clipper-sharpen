@@ -242,13 +242,14 @@ async function extractNoteData(noteId, opts) {
   const comments = [];
   if (opts.withComment) {
     const source = (detail.comments && detail.comments.list) || (note.comments && note.comments.list) || [];
-    const readComment = (comment, withReplies) => {
+    const readComment = (comment, withReplies, root) => {
       const user = comment.userInfo || {};
+      const rootId = root == null ? comment.id : root;
       const pictures = [];
       (comment.pictures || []).forEach((picture, index) => {
         const image = readImage({ infoList: picture.infoList });
         if (!image.imageUrl) return;
-        const file = { path: image.imageUrl, width: image.width, type: "comment", id: comment.id + "_" + index, video: false };
+        const file = { path: image.imageUrl, width: image.width, type: "comment", id: comment.id + "_" + index, root: rootId, video: false };
         files.push(file);
         pictures.push(file);
       });
@@ -260,7 +261,7 @@ async function extractNoteData(noteId, opts) {
         likeCount: comment.likeCount,
         pictures,
         user: { id: user.userId, username: user.nickname },
-        subComments: withReplies ? (comment.subComments || []).map((reply) => readComment(reply, false)) : [],
+        subComments: withReplies ? (comment.subComments || []).map((reply) => readComment(reply, false, rootId)) : [],
       };
     };
     for (const comment of source) comments.push(readComment(comment, true));
@@ -326,7 +327,7 @@ function commentTime(value) {
  * 作者头像/主页链接/IP 归属这些站内信息不进正文——它们没法在纯 markdown 里体面地表达，
  * 硬写成 <a>/<small> 只会在编辑器里变成一坨标签。IP 归属并进时间，和什么值得买一致。
  * 评论配图仍然入清单，引用挂在文字后面，不丢内容。 */
-function appendComments(body, note, files, filePaths, prefix, stem) {
+function appendComments(body, note, files, filePaths, layout) {
   const contentOf = (item) => {
     let text = String((item && item.content) || "").replace(/\s*\n\s*/g, " ").trim();
     const pictures = ((item && item.pictures) || [])
@@ -354,8 +355,8 @@ function appendComments(body, note, files, filePaths, prefix, stem) {
   const section = globalThis.__RN.commentsMarkdown((note.comments || []).map(toComment));
   if (!section) return body;
 
-  const path = stem + "-comments.json";
-  files.push({ filename: prefix + path, text: JSON.stringify(note.comments), mime: "application/json" });
+  const path = layout.mediaStem + "-comments.json";
+  files.push({ filename: layout.comments, text: JSON.stringify(note.comments), mime: "application/json" });
   return body + "\n\n" + section + `\n\n[评论](${globalThis.__RN.rel(path)})\n`;
 }
 
@@ -365,21 +366,23 @@ async function assembleAndStore(downloadId, note, options) {
   const rawTitle = note.rawTitle || "";
   const nick = (note.user && note.user.username) || "";
   const timeMs = note.createDate || Date.now();
-  const rnTitle = RN.name(rawTitle);
-  const rnNick = RN.name(nick);
-  const directory = [rnNick, rnTitle].filter(Boolean).join("/");
-  const prefix = directory ? directory + "/" : "";
-  const stem = rnTitle || rnNick ? RN.base(rawTitle, nick, timeMs) : "未命名文件";
+  const layout = RN.layout(rawTitle, nick, timeMs);
 
   let content = note.content || "";
   for (const tag of note.tags || []) {
     content = content.replaceAll(`#${tag}[话题]#`, "").replaceAll(`#${tag}［话题］#`, "");
   }
-  let body = "# " + (rnTitle || "未命名文件") + "\n\n" + content + "\n";
+  let body = "# " + (rawTitle.trim() || "未命名文件") + "\n\n" + content + "\n";
   const files = [];
   const filePaths = Object.create(null);
-  let mediaIndex = 0;
-  let videoCount = 0;
+  const commentRoots = Object.create(null);
+  (note.comments || []).forEach((comment, index) => {
+    if (comment && comment.id) commentRoots[comment.id] = index + 1;
+  });
+  let bodyIndex = 0;
+  let imageIndex = 0;
+  let videoIndex = 0;
+  let commentImageIndex = 0;
 
   for (const file of note.fileInfos) {
     const source = file.fileUrl && file.fileUrl.url ? file.fileUrl.url : file.fileUrl;
@@ -387,16 +390,23 @@ async function assembleAndStore(downloadId, note, options) {
     const url = normalizeMediaUrl(source, { fileInfo: file });
     const video = !!file.video || /\.(?:mp4|mov|m4v)(\?|$)/i.test(url);
     const extension = video ? ".mp4" : (/(?:format\/jpg|\.jpe?g)/i.test(url) ? ".jpg" : inferExtension(url));
-    const index = ++mediaIndex;
-    if (video) videoCount += 1;
-    const path = stem + "-" + index + extension;
-    if (file.type === "note") body += `\n![${index}](${RN.rel(path)})\n`;
+    const isComment = file.type === "comment";
+    let path;
+    if (isComment) {
+      const root = commentRoots[file.root] || 0;
+      path = RN.commentPath(layout.mediaStem, root, ++commentImageIndex, extension);
+    } else {
+      path = video
+        ? RN.mediaPath(layout.mediaStem, ++videoIndex, extension, true)
+        : RN.mediaPath(layout.mediaStem, ++imageIndex, extension);
+      body += `\n![${++bodyIndex}](${RN.rel(path)})\n`;
+    }
     if (file.id) filePaths[file.id] = path;
-    files.push({ filename: prefix + path, url });
+    files.push({ filename: layout.prefix + path, url });
   }
 
   if (options.withComment && note.comments && note.comments.length) {
-    body = appendComments(body, note, files, filePaths, prefix, stem);
+    body = appendComments(body, note, files, filePaths, layout);
   }
 
   // 用户可能在 MAIN 世界取数或组装期间取消，取消后绝不留下可下载清单。
@@ -406,11 +416,11 @@ async function assembleAndStore(downloadId, note, options) {
     nick,
     timeMs,
     type: note.noteType,
-    counts: { images: mediaIndex - videoCount, videos: videoCount },
+    counts: { images: imageIndex, videos: videoIndex },
     noteId: note.noteId,
     tags: note.tags,
   }) + "\n\n" + body.replace(/\n+$/, "") + "\n";
-  files.push({ filename: prefix + stem + ".md", text: markdown, mime: "text/markdown" });
+  files.push({ filename: layout.md, text: markdown, mime: "text/markdown" });
   await putFiles(downloadId + ":rn", files);
 }
 
@@ -427,10 +437,8 @@ async function saveData(tab, downloadId, options) {
     noteType: raw.noteType,
     comments: raw.noteComments,
     fileInfos: (raw.noteImageList || []).map((file) => ({
+      ...file,
       fileUrl: file.path,
-      width: file.width,
-      type: file.type,
-      id: file.id,
       video: !!file.video,
     })),
   };

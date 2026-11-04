@@ -147,10 +147,8 @@
     const nick = note.user && note.user.nickname || "";
     const title = note.title || "";
     const timeMs = note.time || note.lastUpdateTime;
-    const directory = [RN.name(nick), RN.name(title)].filter(Boolean).join("/");
-    const prefix = directory ? directory + "/" : "";
-    const stem = RN.name(nick) || RN.name(title) ? RN.base(title, nick, timeMs) : "未命名文件";
-    const mediaPath = stem + "-1.mp4";
+    const layout = RN.layout(title, nick, timeMs);
+    const mediaPath = RN.mediaPath(layout.mediaStem, 1, ".mp4", true);
     const url = "https://sns-video-hw.xhscdn.com/" + key;
     const markdown = RN.markdown({
       title,
@@ -172,7 +170,7 @@
       event.stopPropagation();
       ask({
         type: "downloadUrl",
-        data: { url, filename: prefix + mediaPath, mdFilename: prefix + stem + ".md", md: markdown },
+        data: { url, filename: layout.prefix + mediaPath, mdFilename: layout.md, md: markdown },
       }).catch(() => {});
     };
     const block = document.createElement("div");

@@ -10,6 +10,13 @@
   vertical-align: middle;
 }
 
+/* 重要文章的 Banner 自带 transform 堆叠上下文，并在 DOM 中位于侧栏之后。
+ * 只给面板 z-index 会被 Banner 压住；提升侧栏这个 Grid 项，面板整层才会浮在封面上。 */
+.article__important__header__side {
+  position: relative;
+  z-index: 2;
+}
+
 .sspai-xhx-entry {
   display: inline-flex;
   align-items: center;
