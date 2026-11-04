@@ -136,7 +136,7 @@ assert.equal(commentMedia.length, 3, "comments/ 收全部一级、二级评论�
 assert.equal((markdownFile.text.match(/!\[\d+\]/g) || []).length, 2, "正文媒体引用数必须等于正文媒体文件数");
 assert.ok(markdownFile.text.includes("\n类型: 图文\n"), "只有图时类型是「图文」");
 assert.ok(withComments.some((file) => file.filename === "标题/2025.11.01_标题-comments.json"), "评论 JSON 必须落在标题目录根部");
-assert.equal(markdownFile.filename, "标题/2025.11.01_标题_作者-.md", "取消作者目录，MD 保留作者与结尾连字符");
+assert.equal(markdownFile.filename, "标题/2025.11.01_标题_作者.md", "取消作者目录，MD 保留作者且不带额外结尾连字符");
 assert.deepEqual(bodyMedia.map((file) => file.filename), [
   "标题/images/2025.11.01_标题-01.webp",
   "标题/images/2025.11.01_标题-02.jpg",
@@ -245,7 +245,7 @@ assert.equal(imageLines.length, 2, "两张图都要有引用");
 assert.ok(imageLines.every((line) => !line.includes(" ")), "引用里不能留裸空格：" + imageLines[0]);
 assert.ok(imageLines.every((line) => line.includes("images/2025.11.01_标题带空格-")), "标题应去掉空白与括号：" + imageLines[0]);
 assert.ok(cleanedFiles.every((file) => file.filename.startsWith("标题带空格/")), "所有产物只落在清洗后的标题目录");
-assert.equal(cleanedMd.filename, "标题带空格/2025.11.01_标题带空格_作者-.md");
+assert.equal(cleanedMd.filename, "标题带空格/2025.11.01_标题带空格_作者.md");
 assert.ok(cleanedMd.text.includes("# 标题 （带） [空格]"), "清洗只作用于路径，不改 MD 里的原始标题");
 
 /* 无标题笔记使用作者与发布日期兜底目录，不能散落下载根目录。 */
@@ -257,7 +257,7 @@ assert.ok(untitled.every((file) => file.filename.startsWith("未命名文件_作
 assert.deepEqual(untitled.map((file) => file.filename), [
   "未命名文件_作者_2025.11.01/images/2025.11.01-01.webp",
   "未命名文件_作者_2025.11.01/images/2025.11.01-02.jpg",
-  "未命名文件_作者_2025.11.01/2025.11.01_作者-.md",
+  "未命名文件_作者_2025.11.01/2025.11.01_作者.md",
 ]);
 assert.ok(untitled[2].text.includes("# 未命名文件"), "无标题时正文 H1 使用同一个兜底名");
 

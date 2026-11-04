@@ -264,7 +264,7 @@ if (extId) {
   const tree = await opt.locator('section[aria-label="下载目录结构"] pre').textContent();
   ok(tree.includes("标题/") && !tree.includes("作者 / 标题"), "设置页目录树不再展示作者一级目录");
   ok(tree.includes("images/") && tree.includes("media/") && tree.includes("comments/"), "设置页展示三个真实媒体子目录");
-  ok(tree.includes("_作者-.md") && tree.includes("-comments.json") && tree.includes("-01-c1.png"), "设置页文件名示例与真实命名一致");
+  ok(tree.includes("_作者.md") && tree.includes("-comments.json") && tree.includes("-01-c1.png"), "设置页文件名示例与真实命名一致");
   await opt.close();
 } else {
   ok(false, "未拿到扩展 id，跳过设置页检查");

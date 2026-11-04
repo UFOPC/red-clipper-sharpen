@@ -1,6 +1,6 @@
 /* Rednote-Sharpen 命名与 Markdown 规范（供 background service worker 与 content scripts 共用）
  * 目录：<标题>/，无标题时使用 未命名文件_<作者>_<发布日期>/；标题中的空白与括号不进目录名或文件名。
- * 文件：MD <YYYY.MM.DD_标题_作者>-.md；评论 <YYYY.MM.DD_标题>-comments.json。
+ * 文件：MD <YYYY.MM.DD_标题_作者>.md；评论 <YYYY.MM.DD_标题>-comments.json。
  * 媒体：images|media/<YYYY.MM.DD_标题>-NN.ext；评论图 comments/<YYYY.MM.DD_标题>-NN-cN.ext。
  * MD：frontmatter(来源/作者/时间/类型/链接/tags) + # 标题 + 正文 + ![N](./N.ext)；视频同用图片语法，Obsidian 按扩展名渲染成可播放的播放器
  */
@@ -55,7 +55,7 @@
   }
 
   /* 四站共用同一组路径，不再各自拼作者目录或媒体文件名。
-   * MD 主干含作者并保留结尾连字符；其余产物一律使用不带作者的 mediaStem。 */
+   * MD 主干含作者；其余产物一律使用不带作者的 mediaStem。 */
   function layout(title, nick, ms) {
     const named = !!(titleName(title) || name(nick));
     const stem = named ? base(title, nick, ms) : "未命名文件";
@@ -66,7 +66,7 @@
       prefix,
       stem,
       mediaStem,
-      md: prefix + stem + "-.md",
+      md: prefix + stem + ".md",
       comments: prefix + mediaStem + "-comments.json",
     };
   }

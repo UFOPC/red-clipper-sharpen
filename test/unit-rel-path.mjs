@@ -89,7 +89,7 @@ const stamp = 1762000000000;
 const date = RN.dateParts(stamp).date;
 const layout = RN.layout("标题 （带） [空格]", "作者", stamp);
 ok(layout.prefix === "标题带空格/", `只保留清洗后的标题目录（${layout.prefix}）`);
-ok(layout.md === `标题带空格/${date}_标题带空格_作者-.md`, `MD 含作者与结尾连字符（${layout.md}）`);
+ok(layout.md === `标题带空格/${date}_标题带空格_作者.md`, `MD 含作者且无额外结尾连字符（${layout.md}）`);
 ok(layout.comments === `标题带空格/${date}_标题带空格-comments.json`, `评论 JSON 不含作者（${layout.comments}）`);
 ok(RN.mediaPath(layout.mediaStem, 1, ".png") === `images/${date}_标题带空格-01.png`, "正文图片进 images/，序号两位");
 ok(RN.mediaPath(layout.mediaStem, 2, ".jpg") === `images/${date}_标题带空格-02.jpg`, "第二张正文图片连续编号");
@@ -99,7 +99,7 @@ ok(RN.commentPath(layout.mediaStem, 1, 2, ".png") === `comments/${date}_标题�
 ok(RN.commentPath(layout.mediaStem, 2, 3, ".png") === `comments/${date}_标题带空格-02-c3.png`, "下一个一级评论进入 02 段，cN 不重置");
 const untitled = RN.layout("", "作者", stamp);
 ok(untitled.prefix === `未命名文件_作者_${date}/`, `无标题时使用作者与日期兜底目录（${untitled.prefix}）`);
-ok(untitled.md === `未命名文件_作者_${date}/${date}_作者-.md`, `无标题 MD 仍保留日期和作者（${untitled.md}）`);
+ok(untitled.md === `未命名文件_作者_${date}/${date}_作者.md`, `无标题 MD 仍保留日期和作者（${untitled.md}）`);
 ok(RN.mediaPath(untitled.mediaStem, 1, ".png") === `images/${date}-01.png`, "无标题媒体沿用日期主干与两位序号");
 ok(RN.layout("", "作者", stamp).prefix === untitled.prefix, "同一篇重复保存时兜底目录保持稳定");
 ok(RN.layout("", "另一位", stamp).prefix !== untitled.prefix, "不同作者的无标题笔记分目录");

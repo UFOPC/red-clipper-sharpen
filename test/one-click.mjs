@@ -103,7 +103,7 @@ const browser = await chromium.launch({
     .map((f) => ({ filename: f.filename, text: f.text || "" })));
   ok(chh.some((f) => f.filename === "测试目录/images/2026.11.03_测试目录-01.png"), "Chiphell：第 1 张图进入 images/ 且标题已清洗");
   ok(chh.some((f) => f.filename === "测试目录/images/2026.11.03_测试目录-02.jpg"), "Chiphell：第 2 张图连续编号");
-  ok(chh.some((f) => f.filename === "测试目录/2026.11.03_测试目录_作者甲-.md"), "Chiphell：取消作者目录，MD 文件名保留作者");
+  ok(chh.some((f) => f.filename === "测试目录/2026.11.03_测试目录_作者甲.md"), "Chiphell：取消作者目录，MD 文件名保留作者");
   ok(chh.filter((f) => f.text).every((f) => f.text.includes("./images/2026.11.03_测试目录-01.png")), "Chiphell：MD 引用与真实下载路径一致");
   ok(
     await p.evaluate(() => document.querySelector(".xhx-chh-panel").hidden),
@@ -162,7 +162,7 @@ const browser = await chromium.launch({
   });
   ok(r.imgCount > 0, `少数派：点胶囊直接开始存图（${r.imgCount} 张）`);
   ok(r.imgNames.every((name) => /^[^/]+\/images\/[^/]+-\d{2}\.[a-z0-9]+$/i.test(name)), "少数派：全部正文图进入标题/images/ 并使用两位序号");
-  ok(r.mdName.split("/").length === 2 && r.mdName.endsWith("-.md"), `少数派：MD 只在标题目录，作者保留在文件名（${r.mdName}）`);
+  ok(r.mdName.split("/").length === 2 && r.mdName.endsWith(".md") && !r.mdName.endsWith("-.md"), `少数派：MD 只在标题目录，作者保留在文件名（${r.mdName}）`);
   ok(!!r.md && r.md.includes("](./images/"), "少数派：MD 图片引用同步进入 images/");
   ok(!!r.md && !r.md.includes("## 评论"), "少数派：一键下载走的是「正文」，md 不含评论区");
   // 收起是 setTimeout(…, 900) 里做的，等它落地

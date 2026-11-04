@@ -26,7 +26,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 | Images | Saved in body order; extensions are inferred from the **real MIME type**, not guessed from the URL suffix |
 | Video | Xiaohongshu videos are selectable by quality tier; SMZDM in-page videos are saved after decrypting their hotlink protection |
 | Comments | Optional "Body + Comments"; floor number, IP location, like count, and reply-to target are all preserved |
-| Naming | `<title>/YYYY.MM.DD_<title>_<author>-.md`; whitespace and brackets from titles stay out of paths, the author remains only in the Markdown filename, and untitled posts go into `未命名文件_<author>_<date>/` to separate different authors and publication dates |
+| Naming | `<title>/YYYY.MM.DD_<title>_<author>.md`; whitespace and brackets from titles stay out of paths, the author remains only in the Markdown filename, and untitled posts go into `未命名文件_<author>_<date>/` to separate different authors and publication dates |
 
 ## Supported sites
 
@@ -69,7 +69,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 
 ```
 S101CanyonWeekend/
-├── 2026.08.03_S101CanyonWeekend_Jane Doe-.md
+├── 2026.08.03_S101CanyonWeekend_Jane Doe.md
 ├── 2026.08.03_S101CanyonWeekend-comments.json
 ├── images/
 │   ├── 2026.08.03_S101CanyonWeekend-01.png
