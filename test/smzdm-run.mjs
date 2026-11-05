@@ -260,7 +260,7 @@ if (extId) {
     (await opt.locator("#site-count").textContent()) === "4",
     "站点计数由列表数出来，不会与文案漂移"
   );
-  ok((await opt.locator("#version").textContent()) === "v0.6.2", "版本号是 0.6.2");
+  ok((await opt.locator("#version").textContent()) === "v0.6.3", "版本号是 0.6.3");
   const tree = await opt.locator('section[aria-label="下载目录结构"] pre').textContent();
   ok(tree.includes("标题/") && !tree.includes("作者 / 标题"), "设置页目录树不再展示作者一级目录");
   ok(tree.includes("images/") && tree.includes("media/") && tree.includes("comments/"), "设置页展示三个真实媒体子目录");

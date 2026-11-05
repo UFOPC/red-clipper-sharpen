@@ -94,7 +94,7 @@
       "scripting",
       "storage"
    ],
-   "version": "0.6.2",
+   "version": "0.6.3",
    "web_accessible_resources": [
       {
          "matches": [
