@@ -65,7 +65,9 @@
       if (!onImage || !img) return false;
       const url = imageUrl(img);
       if (!url) return false;
-      out.push("\n\n", onImage(url), "\n\n");
+      const markdown = onImage(url);
+      if (!markdown) return false;
+      out.push("\n\n", markdown, "\n\n");
       return true;
     };
     const walk = (node) => {
@@ -89,6 +91,12 @@
         return;
       }
       if (tag === "a") {
+        /* <a href="…"><img …></a>（[url=][img] 的产物）必须先走子树，
+         * 否则「图片链接」被当成纯链接、图片整张丢掉。 */
+        if (node.querySelector("img")) {
+          for (const child of node.childNodes) walk(child);
+          return;
+        }
         const text = node.textContent.replace(/\s+/g, " ").trim();
         if (!text) return;
         const href = absUrl(node.getAttribute("href"));
@@ -109,11 +117,27 @@
     return tidy(out.join(""));
   }
 
-  function postImages(post) {
-    return [...post.querySelectorAll("img")]
+  /* Discuz 把「没插进正文」的附件图排在帖子底部的附件格里：
+   *   <div class="pattl"> <ignore_js_op> <dl class="tattl attm"> <div class="mbn savephotop">
+   *       <img id="aimg_…" src="none.gif" zoomfile="…" file="…">
+   * 这一坨在 td.plc 里、td.t_f 之外，只按正文 DOM 走会整批漏掉
+   * （实测 tid=2915041：正文 7 张、附件格 29 张，一共 36 张）。 */
+  function attachmentImages(post) {
+    const holder = post.closest('[id^="post_"]') || post;
+    return [...holder.querySelectorAll(".pattl img, .tattl img")]
       .filter((img) => !img.closest(".quote, .tip"))
       .map(imageUrl)
       .filter(Boolean);
+  }
+
+  function postImages(post) {
+    const urls = [
+      ...[...post.querySelectorAll("img")]
+        .filter((img) => !img.closest(".quote, .tip"))
+        .map(imageUrl),
+      ...attachmentImages(post),
+    ].filter(Boolean);
+    return [...new Set(urls)];
   }
 
   function postText(post) {
@@ -126,7 +150,17 @@
   function postBody(post, onImage) {
     const clone = post.cloneNode(true);
     clone.querySelectorAll(".quote, .tip, .pstatus, script, style").forEach((node) => node.remove());
-    return htmlToText(clone, onImage);
+    if (!onImage) return htmlToText(clone);
+    /* 同一张图既插在正文又留在附件格时只留一处，避免 MD 里出现重复引用。 */
+    const seen = new Set();
+    const take = (url) => {
+      if (seen.has(url)) return "";
+      seen.add(url);
+      return onImage(url);
+    };
+    const text = htmlToText(clone, take);
+    const extra = attachmentImages(post).map(take).filter(Boolean);
+    return tidy([text, ...extra.map((markdown) => `\n\n${markdown}\n\n`)].join(""));
   }
 
   function quoteText(post) {
@@ -309,17 +343,10 @@
   function mediaSummary(root = document, options = prefs) {
     const posts = collect(root, options).articlePosts;
     const seen = new Set();
-    let count = 0;
     for (const post of posts) {
-      for (const img of post.querySelectorAll("img")) {
-        if (img.closest(".quote, .tip")) continue;
-        const url = imageUrl(img);
-        if (!url || seen.has(url)) continue;
-        seen.add(url);
-        count += 1;
-      }
+      for (const url of postImages(post)) seen.add(url);
     }
-    return { count };
+    return { count: seen.size };
   }
 
   function loadPrefs() {

@@ -120,6 +120,11 @@ S101峡谷两日游/
 **Chiphell 的作者模式。** 带 `authorid` 参数进入「只看楼主」时，楼层归属要改判；从第 2 页进入时必须回第 1 页
 取元信息（目录名、作者、时间），否则会取到回帖人。
 
+**Chiphell 的附件格。** 作者上传但没插进正文的图，Discuz 排在帖子底部
+`div.pattl > ignore_js_op > dl.tattl > div.savephotop` 里，**在 `td.t_f` 之外**。
+只扫 `td.t_f` 会整批漏图（实测 tid=2915041：正文 7 张、附件格 29 张，共 36 张）。
+`postImages()` / `postBody()` 现按「`td.t_f` + 同楼层附件格」合并，按 URL 去重。
+
 **值得买的评论作者。** 页面上 `.display-nickname` 出现 40 次，全是**评论**作者；正文作者只在
 `meta[property="article:author"]` 里。
 

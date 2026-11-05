@@ -125,6 +125,8 @@ Video URLs are signed (`?t=…&sign=…`) and **must not** be rewritten to anoth
 
 **Chiphell's author mode.** Entering "OP only" via the `authorid` parameter changes how floor ownership is determined; entering from page 2 requires going back to page 1 to read the metadata (folder name, author, time), or you get a replier instead of the OP.
 
+**Chiphell's attachment grid.** Images the author uploaded but never inserted into the body are laid out at the bottom of the post inside `div.pattl > ignore_js_op > dl.tattl > div.savephotop` — **outside `td.t_f`**. Scanning only `td.t_f` drops them all (measured on tid=2915041: 7 inline + 29 in the grid = 36). `postImages()` / `postBody()` now merge "`td.t_f` + the same post's grid" and dedupe by URL.
+
 **SMZDM's comment authors.** `.display-nickname` appears 40 times on the page and all of them are **comment** authors; the body author exists only in `meta[property="article:author"]`.
 
 ## Project structure
