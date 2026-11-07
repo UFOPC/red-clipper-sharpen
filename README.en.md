@@ -1,14 +1,15 @@
 # Xiao Hong Xia · Download Assistant
 
-> A Chrome / Edge extension (Manifest V3) that saves Xiaohongshu notes, Chiphell threads, SSPAI articles,
-> and SMZDM (smzdm.com) articles — together with their images, videos, and comments — as a Markdown file
-> with YAML frontmatter plus media organized into dedicated folders.
+> A Chrome / Edge extension (Manifest V3) that saves Xiaohongshu notes, Discuz forum threads (Chiphell, PCbeta,
+> Enshan, Erji), Douban reviews, SSPAI articles, SMZDM articles, WeChat public-account posts, single Weibo posts,
+> and Xiachufang recipes — together with their images, videos, and comments — as a Markdown file with YAML
+> frontmatter plus media organized into dedicated folders.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
 [中文](./README.md) · **English**
 
-> **Note:** the extension UI is Chinese-only, and all four supported sites are Chinese-language platforms.
+> **Note:** the extension UI is Chinese-only, and every supported site is a Chinese-language platform.
 > This English README is provided for reference and for readers who prefer English documentation.
 
 ---
@@ -30,18 +31,25 @@ This extension does exactly one thing: **click once on the page, and get a folde
 
 ## Supported sites
 
-| Site | Content | Notes |
-|---|---|---|
-| Xiaohongshu | Image-text notes, video notes (quality selectable), Live Photos, original video, comments | Offers "Body", "Body + Comments", and "Images: Download / Skip" |
-| Chiphell | Thread body and all images | Supports "OP only" (`authorid`) and cross-page threads |
-| SSPAI | Article body, images, comments | Direct image requests return 403; bytes are fetched by the content script |
-| SMZDM | Article body, images, in-page video, comments | Image `.jpg` suffixes are unreliable; MIME must be restored |
+| Site | Domain | Content | Notes |
+|---|---|---|---|
+| Xiaohongshu | `xiaohongshu.com` | Image-text notes, video notes (quality selectable), Live Photos, original video, comments | Offers "Body", "Body + Comments", and "Images: Download / Skip" |
+| Chiphell | `chiphell.com` | Thread body and all images | Supports "OP only" (`authorid`) and cross-page threads |
+| PCbeta | `bbs.pcbeta.com` | Thread body and all images | Same Discuz engine as Chiphell — no extra JS |
+| Enshan | `right.com.cn` | Thread body and all images | Same engine as above; the site runs slider captcha, so scripted runs hit a challenge |
+| Erji | `erji.net` | Thread body, images, replies | Threads are not statically cached; served via `forum.php?mod=viewthread` |
+| Douban | `douban.com` | Long-form movie / book / music reviews with images | Images live on `doubanio.com` and return 418 to bare requests; the worker attaches a Referer and fetches the bytes |
+| SSPAI | `sspai.com` | Article body, images, comments | Direct image requests return 403; bytes are fetched by the content script |
+| SMZDM | `post.smzdm.com` | Article body, images, in-page video, comments | Only `/p/` article pages; image `.jpg` suffixes are unreliable, MIME must be restored |
+| WeChat public accounts | `mp.weixin.qq.com` | Article body and images | The self-use build can switch its output layout to match Wechat-Sharpen; the release build always uses the generic tree |
+| Weibo | `m.weibo.cn` | Single image-text or gallery post, upgraded to `/large/` originals | Only `/status/<id>` and `/detail/<id>`; video posters do not count as images, and videos are not downloaded |
+| Xiachufang | `xiachufang.com` | Recipe intro, ingredient table, step images, finished-dish images | Strips the `?imageView2/…` thumbnail instruction to get the original; the CDN answers bare requests with 200, no Referer needed |
 
 ## Installation
 
 **From a Release**
 
-1. Download the latest `XHX-<version>.zip` (XHX is short for 小红虾) and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned)
+1. Download the latest `小红虾-<version>.zip` and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned). A `小红虾-self-<version>.zip` build also exists: identical, except that WeChat public-account posts default to the Wechat-Sharpen layout and the options page keeps a layout switch for them
 2. Open `chrome://extensions` (or `edge://extensions` on Edge)
 3. Turn on "Developer mode" in the top-right corner
 4. Click "Load unpacked" and select the extracted folder
@@ -81,7 +89,8 @@ S101CanyonWeekend/
     └── 2026.08.03_S101CanyonWeekend-01-c2.png
 ```
 
-All four sites use this layout. In the `comments/` examples, `01` identifies the owning top-level comment and is inherited by nested replies; `cN` is a global comment-image counter for the whole post and never resets within an individual comment.
+All sites use this layout. WeChat public-account posts are the one exception: the self-use build can switch them
+to a Wechat-Sharpen-compatible tree on the options page. In the `comments/` examples, `01` identifies the owning top-level comment and is inherited by nested replies; `cN` is a global comment-image counter for the whole post and never resets within an individual comment.
 
 ```yaml
 ---
@@ -132,16 +141,20 @@ Video URLs are signed (`?t=…&sign=…`) and **must not** be rewritten to anoth
 ## Project structure
 
 ```
-manifest.json          MV3 manifest: four content scripts + one service worker
+manifest.json          MV3 manifest: eight content scripts (eleven sites) + one service worker
 js/
   background.js        message routing, IndexedDB staging, Xiaohongshu fetching and assembly
-  rn-format.js         naming / frontmatter / text-image layout / quality tiers, shared by all four sites
+  rn-format.js         naming / frontmatter / text-image layout / quality tiers, shared by all sites
   setting.js|css       options page (site list and version number)
 content/
   index.js|css         Xiaohongshu: capsule, panel, comment expansion, progress, quality, original video
-  chiphell.js|css      Chiphell: Discuz X3 structure, including author mode and cross-page threads
+  discuz.js|css        Discuz! X engine (Chiphell / PCbeta / Enshan / Erji): author mode, paging, attachment grid
+  douban.js|css        Douban: reviews, with Referer-guarded image bytes
   sspai.js|css         SSPAI: includes hotlink-protection handling
   smzdm.js|css         SMZDM: includes MIME restoration and video decryption
+  wechat.js            WeChat public accounts: Wechat-Sharpen-compatible output layout
+  weibo.js|css         Weibo: single post, images upgraded to `/large/`
+  xiachufang.js|css    Xiachufang: recipe parsing, thumbnail-instruction stripping
   format-size.js       size formatting (base 1000, no library)
 setting.html           options page
 test/                  Playwright end-to-end tests
@@ -156,8 +169,9 @@ Content scripts talk to the service worker via `chrome.runtime.sendMessage`:
 | `getNote` | `{downloadId}` | Enters the page's MAIN world to fetch the raw note object |
 | `saveData` | `{downloadId, withComment, rnOnly, videoUrl, skipMedia}` | Assembles the file list and writes it to IndexedDB |
 | `download` | `{downloadId}` | Downloads the listed files one by one |
-| `downloadFiles` | `{data:{files:[…]}}` | Hands over a batch of files directly (used by the three site adapters) |
+| `downloadFiles` | `{data:{files:[…]}}` | Hands over a batch of files directly (used by the site adapters) |
 | `downloadUrl` | `{data:{url, filename, md?, mdFilename?}}` | Downloads media first, then (optionally) writes the md |
+| `fetchMedia` | `{data:{url}}` | Fetches image bytes in the worker (bypassing CORS), returns `{ok, type, base64}` |
 | `clearData` / `cancel` | — | Clears staging / cancels the current save |
 
 Staging uses IndexedDB rather than memory: MV3 service workers get recycled, and in-memory variables do not survive a cancellation or an idle period.
@@ -181,7 +195,13 @@ Page snapshots (`test/fixtures/*.html`) are not committed for copyright reasons;
 
 - No data collection, no telemetry, no communication with any server
 - All network requests happen only on the site you are browsing and its image/video CDNs, solely to fetch content back and write it locally
-- Only three permissions are required: `downloads` (writing files), `scripting` (injecting the extractor), `storage` (remembering options)
+- Four `permissions`, matching `manifest.json` one to one:
+  - `downloads` — writing files to disk
+  - `scripting` — running the extractor in the MAIN world of Xiaohongshu pages to read the raw note object
+  - `storage` — remembering panel options
+  - `declarativeNetRequestWithHostAccess` — adding a single `Referer` request header for the Douban and Weibo image hosts (two static rules under `rules/`)
+- Five `host_permissions` in total — Xiaohongshu pages, the Douban and Weibo image hosts, and SSPAI's two static-asset domains: reading note data on Xiaohongshu, and fetching image bytes in the background for Douban and Weibo (bare requests return 418 and 403 respectively)
+- `content_scripts` cover the eleven supported sites only (the capsule plus that site's adapter) and add no entries to `host_permissions`
 
 ## Disclaimer
 
