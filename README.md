@@ -1,6 +1,6 @@
 # 小红虾 · 下载助手
 
-> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、Chiphell / 远景论坛帖子、少数派文章、什么值得买文章，
+> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、论坛帖子、豆瓣影评、少数派文章、什么值得买文章，
 > 连同图片、视频、评论，存成一份带 YAML frontmatter 的 Markdown + 分类媒体目录。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
@@ -33,12 +33,15 @@
 | 远景论坛 | `bbs.pcbeta.com` | 论坛帖子正文与全部图片 | 与 Chiphell 共用一套 Discuz 引擎，零新增 JS |
 | 恩山无线 | `right.com.cn` | 论坛帖子正文与全部图片 | 同上；站方有滑块风控，脚本化跑会撞验证码 |
 | 耳机大家坛 | `erji.net` | 论坛帖子正文、图片、回复 | 帖子不静态化，走 `forum.php?mod=viewthread` |
+| 豆瓣 | `douban.com` | 影评 / 书评 / 乐评长文与配图 | 图片在 `doubanio.com`，裸请求回 418；后台补 Referer 后取字节 |
 | 少数派 | `sspai.com` | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
 | 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
 
 > 表格、弹窗、`manifest.content_scripts.matches` 三处**顺序一致**。浏览器扩展详情页按 manifest 的
 > 顺序逐条列出 `*://*.<域名>/*`，扩展改不了那串文案，但可以保证顺序对得上，从上往下逐条能对上号。
+> 唯一多出来的一行是 `*://*.doubanio.com/*`（豆瓣图床的 host 权限），它排在 `content_scripts.matches`
+> 之后，是浏览器自动补的。
 
 ## 安装
 
@@ -155,6 +158,9 @@ PW=… PW_EXE=… node test/regress-discuz.mjs <旧版目录> <新版目录> <�
 
 # 新站实跑：真页面打开 → 注入 → 点胶囊 → 断言正文与 frontmatter
 PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthread-1079227-1-1.html
+
+# 豆瓣：额外断言「每张图都拿到真字节」（裸请求会 418，不能退回原地址）
+PW=… PW_EXE=… node test/e2e-real-douban.mjs https://movie.douban.com/review/17890635/
 ```
 
 `PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。
@@ -210,9 +216,14 @@ test/                  Playwright 端到端用例
 | `getNote` | `{downloadId}` | 进页面 MAIN 世界取原始 note 对象 |
 | `saveData` | `{downloadId, withComment, rnOnly, videoUrl, skipMedia}` | 组装文件清单并写入 IndexedDB |
 | `download` | `{downloadId}` | 按清单逐个落盘 |
-| `downloadFiles` | `{data:{files:[…]}}` | 直接下发一批文件（三个站适配层用这条） |
+| `downloadFiles` | `{data:{files:[…]}}` | 直接下发一批文件（各站适配层用这条） |
 | `downloadUrl` | `{data:{url, filename, md?, mdFilename?}}` | 先下媒体，再（可选）写 md |
+| `fetchMedia` | `{data:{url}}` | 后台代取图片字节（绕开 CORS），返回 `{ok, type, base64}` |
 | `clearData` / `cancel` | — | 清暂存 / 取消当前保存 |
+
+**防盗链分两种**：少数派是「内容脚本 fetch 就够」；`doubanio.com` 这类是「必须带 Referer，
+页面内 fetch 又被 CORS 挡住」，只能由静态 DNR 规则改请求头 + `fetchMedia` 后台代取，
+取回的字节内联成 `data:` URL 再交给下载器。规则在 `rules/douban-referer.json`。
 
 暂存走 IndexedDB 而不是内存：MV3 的 service worker 会被回收，内存变量活不过一次取消或一次空闲。
 
