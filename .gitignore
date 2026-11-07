@@ -1,4 +1,5 @@
 # 发版包不入库（作为 Release 附件）
+dist/
 *.zip
 *.crx
 
