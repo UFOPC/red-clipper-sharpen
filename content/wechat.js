@@ -25,7 +25,10 @@
   if (document.querySelector(".xhx-dz-btn")) return;
 
   const PREFS_KEY = "wx-prefs";
+  const LAYOUT_KEY = "layout";
   const prefs = { media: true };
+  /* 由设置页决定：native（小红虾原生）/ sharpen（对齐 Wechat-Sharpen） */
+  let layoutMode = "native";
   const MAX_IMAGES = 300;
   const BLOCK = new Set(["section", "p", "div", "blockquote", "ul", "ol", "li", "tr", "table", "figure", "figcaption", "pre"]);
   const DROP = /^(script|style|svg|mp-style-type|iframe|video|audio|source)$/;
@@ -206,43 +209,70 @@
     const { title, account, published, body } = meta();
     if (!body) throw new Error("找不到正文容器 #js_content");
 
+    const url = location.href.split("#")[0];
     const aid = hash8(location.pathname + location.search);
-    const dir = dirOf(pubDate(published));
+    const date = pubDate(published);
+    const timeMs = date ? date.getTime() : Date.now();
+    /* native = 小红虾原生结构（<标题>/ + images/ + 中文 frontmatter），发布版默认；
+     * sharpen = 对齐 Wechat-Sharpen 存量（YYYY-MM/YY-MM-DD/ + assets/ + 英文 frontmatter），自用默认。 */
+    const native = layoutMode !== "sharpen";
+    const layout = native ? RN.layout(title, account, timeMs) : null;
+    const dir = native ? layout.prefix : dirOf(date) + "/";
+
     const media = [];
     const byUrl = new Map();
 
     const onImage = options.media
-      ? (url, index) => {
-        if (!byUrl.has(url)) {
-          const name = `${aid}_${String(index).padStart(3, "0")}_${hash8(url)}${extOf(url)}`;
-          media.push({ url, name });
-          byUrl.set(url, name);
-          if (media.length > MAX_IMAGES) return "";
+      ? (src, index) => {
+        if (byUrl.has(src)) {
+          const cached = byUrl.get(src);
+          return native ? `![${media.find((m) => m.url === src).no}](${RN.rel(cached)})` : `![图片](${cached})`;
         }
-        return `![图片](assets/${byUrl.get(url)})`;
+        if (media.length >= MAX_IMAGES) return "";
+        const ext = extOf(src);
+        const no = media.length + 1;
+        const relPath = native
+          ? RN.mediaPath(layout.mediaStem, no, ext)
+          : `assets/${aid}_${String(index).padStart(3, "0")}_${hash8(src)}${ext}`;
+        media.push({ url: src, no, path: relPath });
+        byUrl.set(src, relPath);
+        return native ? `![${no}](${RN.rel(relPath)})` : `![图片](${relPath})`;
       }
       : null;
 
     const markdown = toMarkdown(body, onImage);
     const files = media.map((item) => ({
-      filename: `${dir}/assets/${item.name}`,
+      filename: dir + item.path,
       url: item.url,
     }));
 
-    const front = [
-      "---",
-      `title: ${quote(title)}`,
-      `source: ${quote(location.href.split("#")[0])}`,
-      `published: ${quote(published)}`,
-      `created: ${quote(todayStamp())}`,
-      "---",
-      "",
-      "",
-    ].join("\n");
+    const front = native
+      ? RN.frontmatter({
+        title,
+        nick: account,
+        timeMs,
+        type: "normal",
+        counts: { images: media.length, videos: 0 },
+        noteId: aid,
+        source: "微信公众号",
+        url,
+      })
+      : [
+        "---",
+        `title: ${quote(title)}`,
+        `source: ${quote(url)}`,
+        `published: ${quote(published)}`,
+        `created: ${quote(todayStamp())}`,
+        "---",
+      ].join("\n");
+
+    const parts = [front, ""];
+    if (native) parts.push(`# ${title}`, "");
+    parts.push(markdown, "");
 
     files.push({
-      filename: `${dir}/${safeName(title)}.md`,
-      text: front + markdown + "\n",
+      filename: native ? layout.md : `${dir}${safeName(title)}.md`,
+      text: parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n",
       mime: "text/markdown",
     });
 
@@ -250,9 +280,10 @@
       files,
       title,
       account,
-      dir,
+      dir: dir.replace(/\/$/, ""),
       mediaCount: media.length,
       chars: markdown.length,
+      mode: native ? "native" : "sharpen",
     };
   }
 
@@ -261,9 +292,10 @@
   function loadPrefs() {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get(PREFS_KEY, (data) => {
+        chrome.storage.local.get([PREFS_KEY, LAYOUT_KEY], (data) => {
           const saved = data && data[PREFS_KEY];
           if (saved && typeof saved === "object") prefs.media = saved.media !== false;
+          layoutMode = data && data[LAYOUT_KEY] === "sharpen" ? "sharpen" : "native";
           resolve();
         });
       } catch (e) {

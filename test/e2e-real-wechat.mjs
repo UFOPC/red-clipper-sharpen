@@ -1,10 +1,11 @@
 /* 公众号适配端到端：真页面打开 → 注入 → 点胶囊 → 校验落盘规范。
  *
- *   node test/e2e-real-wechat.mjs https://mp.weixin.qq.com/s/XXXXXXXX
+ *   LAYOUT=native  node test/e2e-real-wechat.mjs https://mp.weixin.qq.com/s/XXXX
+ *   LAYOUT=sharpen node test/e2e-real-wechat.mjs https://mp.weixin.qq.com/s/XXXX
  *
- * 断言的是「与 Wechat-Sharpen 存量同构」这件事：
- *   路径 YYYY-MM/YY-MM-DD/<标题>.md、图片 assets/<aid8>_<NNN>_<url8>.<ext>、
- *   frontmatter 键 title/source/published/created。
+ * 两套目录树都要过：
+ *   native  <标题>/YYYY.MM.DD_标题_公众号名.md + images/<…>-01.png + 中文 frontmatter
+ *   sharpen YYYY-MM/YY-MM-DD/<标题>.md + assets/<aid8>_<NNN>_<url8>.<ext> + title/source/published/created
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -14,8 +15,9 @@ const { chromium } = pw.default ?? pw;
 
 const target = process.argv[2];
 const extDir = process.env.EXT_DIR || path.resolve(".");
+const mode = process.env.LAYOUT === "sharpen" ? "sharpen" : "native";
 if (!target) {
-  console.error("用法: node test/e2e-real-wechat.mjs <文章URL>");
+  console.error("用法: LAYOUT=native|sharpen node test/e2e-real-wechat.mjs <文章URL>");
   process.exit(2);
 }
 
@@ -25,16 +27,22 @@ try {
   const page = await browser.newPage({
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   });
-  await page.addInitScript(() => {
+  await page.addInitScript((m) => {
     window.__SENT = [];
+    window.__STORE = m === "sharpen" ? { layout: "sharpen" } : {};
     window.chrome = {
       runtime: {
         getURL: (p) => location.origin + "/" + p,
         sendMessage: async (msg) => { window.__SENT.push(msg); return null; },
       },
-      storage: { local: { get: (_k, cb) => cb({}), set: () => {} } },
+      storage: {
+        local: {
+          get: (keys, cb) => cb(window.__STORE || {}),
+          set: () => {},
+        },
+      },
     };
-  });
+  }, mode);
 
   await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45000 });
   await page.waitForSelector("#js_content", { timeout: 20000 });
@@ -43,8 +51,6 @@ try {
   await page.addScriptTag({ path: path.join(extDir, "content/wechat.js") });
   await page.waitForSelector(".xhx-dz-btn", { timeout: 10000 });
 
-  /* 点胶囊本体＝按默认选项（含图片）直接存，不经过面板。
-   * 公众号正文很长时 dock 可能落在视口外，force 跳过可见性检查。 */
   await page.evaluate(() => document.querySelector(".xhx-dz-btn").click());
   await page.waitForTimeout(3000);
 
@@ -60,27 +66,31 @@ try {
   if (!md) throw new Error("没有产出 markdown");
 
   const checks = [];
-  checks.push(["目录 YYYY-MM/YY-MM-DD", /^\d{4}-\d{2}\/\d{2}-\d{2}-\d{2}\/.+\.md$/.test(md.filename)]);
-  checks.push(["图片 assets/ 命名", media.every((f) => /\d{4}-\d{2}\/\d{2}-\d{2}-\d{2}\/assets\/[0-9a-f]{8}_\d{3}_[0-9a-f]{8}\.\w+$/.test(f.filename))]);
-  checks.push(["frontmatter title", /^---\ntitle: "/.test(md.text)]);
-  checks.push(["frontmatter source", /source: "https:\/\/mp\.weixin\.qq\.com\/s\//.test(md.text)]);
-  checks.push(["frontmatter published", /published: "\d{4}年\d{1,2}月\d{1,2}日/.test(md.text)]);
-  checks.push(["frontmatter created", /created: "\d{4}-\d{2}-\d{2}"/.test(md.text)]);
-  checks.push(["正文 ≥ 200 字", md.text.length > 200]);
-  checks.push(["图片引用走 assets/", md.text.includes("](assets/") || media.length === 0]);
-  checks.push(["无 H1 重复标题", !/^# /m.test(md.text.split("---").slice(2).join("---"))]);
-
-  console.log("md   " + md.filename);
-  console.log("图片 " + media.length + (media[0] ? "，示例 " + media[0].filename : ""));
-  for (const [name, ok] of checks) {
-    console.log((ok ? "  ✓ " : "  ✗ ") + name);
+  if (mode === "sharpen") {
+    checks.push(["md 路径 YYYY-MM/YY-MM-DD/<标题>.md", /^\d{4}-\d{2}\/\d{2}-\d{2}-\d{2}\/[^/]+\.md$/.test(md.filename)]);
+    checks.push(["图片 assets/ 命名", media.length > 0 && media.every((f) => /\/assets\/[0-9a-f]{8}_\d{3}_[0-9a-f]{8}\.\w+$/.test(f.filename))]);
+    checks.push(["frontmatter title/source/published/created",
+      /^---\ntitle: "/.test(md.text) &&
+      /source: "https:\/\/mp\.weixin\.qq\.com\/s/.test(md.text) &&
+      /published: "\d{4}年\d{1,2}月\d{1,2}日/.test(md.text) &&
+      /created: "\d{4}-\d{2}-\d{2}"/.test(md.text)]);
+    checks.push(["正文无重复 H1", !/^# /m.test(md.text.split("---").slice(2).join("---"))]);
+    checks.push(["图片引用走 assets/", media.length === 0 || md.text.includes("](assets/")]);
+  } else {
+    checks.push(["md 路径 <标题目录>/日期_标题_公众号.md", /^[^/]+\/\d{4}\.\d{2}\.\d{2}_[^/]+\.md$/.test(md.filename)]);
+    checks.push(["图片 images/ 命名", media.length > 0 && media.every((f) => /\/images\/\d{4}\.\d{2}\.\d{2}_[^/]+-\d{2}\.\w+$/.test(f.filename))]);
+    checks.push(["frontmatter 中文键", /^---\n来源: 微信公众号\n/.test(md.text) && /作者: /.test(md.text) && /链接: /.test(md.text)]);
+    checks.push(["正文有 H1", /^# /m.test(md.text)]);
+    checks.push(["图片引用走 ./images/", media.length === 0 || /!\[\d+\]\(\.\/images\//.test(md.text)]);
   }
+  checks.push(["正文 ≥ 200 字", md.text.length > 200]);
+  checks.push(["引用数 == 媒体数", (md.text.match(/!\[[^\]]*\]\(/g) || []).length === media.length]);
+
+  console.log(`[${mode}] md ${md.filename}`);
+  console.log(`[${mode}] 图片 ${media.length}${media[0] ? "，示例 " + media[0].filename : ""}`);
+  for (const [name, ok] of checks) console.log((ok ? "  ✓ " : "  ✗ ") + name);
   failed = checks.some(([, ok]) => !ok);
   console.log(failed ? "✗ 有断言未通过" : "✓ 全部通过");
-  if (!failed) {
-    console.log("--- 正文前 200 字 ---");
-    console.log(md.text.split("---").slice(2).join("---").trim().slice(0, 200));
-  }
 } catch (e) {
   console.error("✗ " + e.message.split("\n")[0]);
 } finally {

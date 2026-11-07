@@ -154,21 +154,25 @@ PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthrea
 
 `PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。
 
-## 公众号：与 Wechat-Sharpen 同构
+## 公众号：两套目录树
 
-公众号**不用**小红虾原生的 `<标题>/` + `images/` 结构，而是复刻 Wechat-Sharpen 管线的落盘规范。
-原因很实际：`09-Article` 里已有几十篇该管线的产物，同一个目录出现两套命名就没法用一条 Dataview 查。
+设置页里可切换，只影响公众号：
 
-| | Wechat-Sharpen | 小红虾公众号 |
+| | 通用（默认） | 自用 · 对齐 Wechat-Sharpen |
 |---|---|---|
-| 目录 | `YYYY-MM/YY-MM-DD/` | 同 |
-| 文件 | `<标题>.md` | 同 |
-| 图片 | `assets/<aid8>_<NNN>_<url8>.<ext>` | 同格式，hash 算法不同 |
-| frontmatter | `title` `source` `published` `created` | 同 |
-| `description` / `tags` | 富化阶段写入 | 留空，交给同一套富化管线 |
+| 目录 | `<标题>/` | `YYYY-MM/YY-MM-DD/` |
+| 文件 | `YYYY.MM.DD_标题_公众号名.md` | `<标题>.md` |
+| 图片 | `images/<…>-01.png` | `assets/<aid8>_<NNN>_<url8>.<ext>` |
+| 引用 | `![1](./images/…)` | `![图片](assets/…)` |
+| frontmatter | 来源 / 作者 / 时间 / 类型 / 链接 | title / source / published / created |
 
-两个 hash 都只是「稳定短标识」——同一篇文章、同一张图，多次剪藏得到同一个名字；
-不要求和 Skill 产出的 hash 相同（存量文件的 hash 已定，重名只可能发生在同一天同一篇，实际不会撞）。
+「通用」与其他四个站完全一致，**发布版默认**。「自用」复刻 Wechat-Sharpen 管线 ——
+`09-Article` 里已有几十篇它的产物，同一目录出现两套命名就没法用一条 Dataview 查。
+
+两个 hash 只是稳定短标识：同一篇文章、同一张图，多次剪藏得到同一个名字；不要求和 Skill 产出的 hash 相同。
+`description` / `tags` 一律留空，交给富化阶段补 —— 扩展没有 LLM，不写空壳。
+
+切换写的是 `chrome.storage.local` 的 `layout`，content script 在页面加载时读一次，所以要**刷新文章页**才生效。
 
 **只做单篇手动。** 批量抓取、历史文章导入、订阅推送都留在 Wechat-Sharpen 侧（它有 DB / 书签 / URL 三条来源
 和登录态），扩展这边不碰，避免踩微信的批量抓取条款。

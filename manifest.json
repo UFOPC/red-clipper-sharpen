@@ -83,7 +83,7 @@
             "content/wechat.js"
          ],
          "matches": [
-            "*://mp.weixin.qq.com/s/*"
+            "*://mp.weixin.qq.com/*"
          ],
          "run_at": "document_idle"
       }
