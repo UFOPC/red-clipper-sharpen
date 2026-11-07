@@ -264,6 +264,22 @@ node test/unit-kind.mjs
 for f in test/unit-*.mjs; do node "$f" || echo "FAIL $f"; done
 ```
 
+**离线全量**（不碰真站，约三分半；改完任何 `content/` 或 `js/` 都该跑这一条）：
+
+```bash
+export SNAP=~/Pictures/<菜谱页面快照>.html
+for f in test/unit-*.mjs test/xhs-*.mjs test/smzdm-*.mjs test/sspai-*.mjs \
+         test/e2e-discuz-blocked.mjs test/e2e-xcf-snapshot.mjs \
+         test/one-click.mjs test/chh-attach.mjs test/quality-default.mjs \
+         test/panel-compare.mjs test/panel-fit.mjs; do
+  node "$f" >/dev/null 2>&1 || echo "FAIL $f"
+done
+```
+
+`e2e-real-*` 要真页面（会撞风控），`regress-discuz` 要一个旧版扩展目录做基线，两者不在上面这条里。
+不传 `PW_EXE` 时，所有 Playwright 用例默认指到 `chromium-1243/chrome-win64/chrome.exe`——
+本机只装了完整 chromium、没装 headless shell，漏了这个默认值会报 `Executable doesn't exist`。
+
 其中两个守的是「整篇内容一个字节都不落」的底线：`unit-name`（落盘名的字符清洗与长度闸门——
 Chrome 对非法 filename 是直接 reject，不是截断）与 `unit-download`（md / comments.json
 必须确知写完了才算成功，视频大图不等待）。
