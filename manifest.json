@@ -59,8 +59,7 @@
             "content/sspai.js"
          ],
          "matches": [
-            "*://sspai.com/*",
-            "*://www.sspai.com/*"
+            "*://*.sspai.com/*"
          ],
          "run_at": "document_idle"
       },
@@ -121,8 +120,7 @@
             "*://www.52pojie.cn/*",
             "*://www.right.com.cn/*",
             "*://bbs.erji.net/*",
-            "*://sspai.com/*",
-            "*://www.sspai.com/*",
+            "*://*.sspai.com/*",
             "*://post.smzdm.com/*",
             "*://mp.weixin.qq.com/*"
          ],
