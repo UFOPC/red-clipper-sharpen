@@ -36,12 +36,12 @@ const panels = [
   ],
   [
     "Chiphell",
-    `<div class="xhx-chh-panel">
-      <div class="xhx-chh-row"><div class="xhx-chh-key">图片<span class="cnt">12 张</span></div>
-        <div class="xhx-chh-seg"><button class="is-on">下载</button><button>跳过</button></div></div>
-      <div class="xhx-chh-actions">
-        <button class="xhx-chh-go">正文</button>
-        <button class="xhx-chh-go is-ghost">正文+回复</button>
+    `<div class="xhx-dz-panel">
+      <div class="xhx-dz-row"><div class="xhx-dz-key">图片<span class="cnt">12 张</span></div>
+        <div class="xhx-dz-seg"><button class="is-on">下载</button><button>跳过</button></div></div>
+      <div class="xhx-dz-actions">
+        <button class="xhx-dz-go">正文</button>
+        <button class="xhx-dz-go is-ghost">正文+回复</button>
       </div>
     </div>`,
   ],
@@ -109,7 +109,7 @@ const html = `<!doctype html><meta charset="utf-8"><style>
   .note code{font:inherit;background:#e4e7eb;border-radius:4px;padding:0 4px}
   .probe{display:block!important;position:static!important;margin:0}
   ${read("content/index.css")}
-  ${read("content/chiphell.css")}
+  ${read("content/discuz.css")}
   ${read("content/sspai.css")}
   ${read("content/smzdm.css")}
 </style>

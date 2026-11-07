@@ -13,7 +13,10 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const pw = await import(process.env.PW ? pathToFileURL(path.resolve(process.env.PW)).href : "playwright");
+/* 别退回裸 "playwright"：ESM 不认 NODE_PATH，装不上就 ERR_MODULE_NOT_FOUND。
+ * 默认给托管 node 的共享 workspace，PW 环境变量仍可覆盖。 */
+const PW_DEFAULT = "C:/Users/China/.workbuddy-ai/binaries/node/workspace/node_modules/playwright/index.js";
+const pw = await import(pathToFileURL(path.resolve(process.env.PW || PW_DEFAULT)).href);
 const { chromium } = pw.default ?? pw;
 
 /* 跨页只在「只看楼主」模式触发：authorId 来自 URL 的 ?authorid=，与按钮无关。
@@ -48,7 +51,13 @@ const page3 = `<!doctype html><html><head><meta charset="utf-8"><title>三页帖
   ${post(5, "<p>第三页正文，这一页是好的。</p>")}
 </body></html>`;
 
-const browser = await chromium.launch(process.env.PW_EXE ? { executablePath: process.env.PW_EXE } : {});
+/* 不传 executablePath 时 playwright 会去找 headless shell（本机只装了 chromium-1243），
+ * 直接报 "Executable doesn't exist"。默认指到完整 chromium。 */
+const browser = await chromium.launch({
+  executablePath:
+    process.env.PW_EXE || "C:/Users/China/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe",
+  headless: true,
+});
 let failed = true;
 try {
   const page = await browser.newPage();

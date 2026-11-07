@@ -44,12 +44,12 @@ const panels = {
       <div class="xhx-act-row"><div class="xhx-download-btn xhx-act-ghost">正文+回复</div></div>
     </div>`,
   Chiphell: `
-    <div class="xhx-chh-panel" id="p3">
-      <div class="xhx-chh-row"><div class="xhx-chh-key">图片<span class="cnt">12 张</span></div>
-        <div class="xhx-chh-seg"><button class="is-on">下载</button><button>跳过</button></div></div>
-      <div class="xhx-chh-actions">
-        <button class="xhx-chh-go">正文</button>
-        <button class="xhx-chh-go is-ghost">正文+回复</button>
+    <div class="xhx-dz-panel" id="p3">
+      <div class="xhx-dz-row"><div class="xhx-dz-key">图片<span class="cnt">12 张</span></div>
+        <div class="xhx-dz-seg"><button class="is-on">下载</button><button>跳过</button></div></div>
+      <div class="xhx-dz-actions">
+        <button class="xhx-dz-go">正文</button>
+        <button class="xhx-dz-go is-ghost">正文+回复</button>
       </div>
     </div>`,
   少数派: `
@@ -77,7 +77,7 @@ const panels = {
 const html = `<!doctype html><meta charset="utf-8"><style>
   body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f6f7f9}
   .probe{display:block!important;position:static!important;margin:18px}
-  ${read("content/index.css")}\n${read("content/chiphell.css")}\n${read("content/sspai.css")}\n${read("content/smzdm.css")}
+  ${read("content/index.css")}\n${read("content/discuz.css")}\n${read("content/sspai.css")}\n${read("content/smzdm.css")}
 </style>${Object.values(panels).join("\n")}`;
 
 const browser = await chromium.launch({

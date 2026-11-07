@@ -110,15 +110,15 @@ await p.goto("https://www.chiphell.com/forum.php?mod=viewthread&tid=9000&page=1&
   waitUntil: "domcontentloaded",
 });
 await p.addScriptTag({ content: read("js/rn-format.js") });
-await p.addScriptTag({ content: read("content/chiphell.js") });
-await p.waitForSelector(".xhx-chh-btn", { timeout: 5000 });
+await p.addScriptTag({ content: read("content/discuz.js") });
+await p.waitForSelector(".xhx-dz-btn", { timeout: 5000 });
 
-await p.hover(".xhx-chh-btn");
-await p.waitForFunction(() => !document.querySelector(".xhx-chh-panel").hidden, null, { timeout: 5000 });
-ok((await p.locator(".xhx-chh-key .cnt").textContent()).includes("5 张"), "面板张数把附件格与图片链接算进来（5 张，非图片附件不计）");
+await p.hover(".xhx-dz-btn");
+await p.waitForFunction(() => !document.querySelector(".xhx-dz-panel").hidden, null, { timeout: 5000 });
+ok((await p.locator(".xhx-dz-key .cnt").textContent()).includes("5 张"), "面板张数把附件格与图片链接算进来（5 张，非图片附件不计）");
 
-await p.click(".xhx-chh-btn");
-await p.waitForFunction(() => document.querySelector(".xhx-chh-status").textContent.trim() !== "", null, {
+await p.click('.xhx-dz-go[data-comments="0"]');
+await p.waitForFunction(() => document.querySelector(".xhx-dz-status").textContent.trim() !== "", null, {
   timeout: 8000,
 });
 const files = await p.evaluate(() =>

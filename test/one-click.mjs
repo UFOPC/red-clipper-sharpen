@@ -84,19 +84,19 @@ const browser = await chromium.launch({
   await p.addInitScript(stubChrome);
   await p.goto("https://www.chiphell.com/thread-2600000-1-1.html", { waitUntil: "domcontentloaded" });
   await p.addScriptTag({ content: read("js/rn-format.js") });
-  await p.addScriptTag({ content: read("content/chiphell.js") });
-  await p.waitForSelector(".xhx-chh-btn", { timeout: 5000 });
+  await p.addScriptTag({ content: read("content/discuz.js") });
+  await p.waitForSelector(".xhx-dz-btn", { timeout: 5000 });
 
-  await p.hover(".xhx-chh-btn");
-  await p.waitForFunction(() => !document.querySelector(".xhx-chh-panel").hidden, null, { timeout: 5000 });
+  await p.hover(".xhx-dz-btn");
+  await p.waitForFunction(() => !document.querySelector(".xhx-dz-panel").hidden, null, { timeout: 5000 });
   ok(true, "Chiphell：悬停展开面板");
 
-  await p.click(".xhx-chh-btn");
-  await p.waitForFunction(() => document.querySelector(".xhx-chh-status").textContent.trim() !== "", null, {
+  await p.click('.xhx-dz-go[data-comments="0"]');
+  await p.waitForFunction(() => document.querySelector(".xhx-dz-status").textContent.trim() !== "", null, {
     timeout: 8000,
   });
-  const st = (await p.locator(".xhx-chh-status").textContent()).trim();
-  ok(/已提交/.test(st), `Chiphell：点胶囊直接进 run()（状态「${st}」）`);
+  const st = (await p.locator(".xhx-dz-status").textContent()).trim();
+  ok(/已提交/.test(st), `Chiphell：点「正文」直接进 run()（状态「${st}」）`);
   const chh = await p.evaluate(() => window.__sent
     .filter((m) => m.type === "downloadFiles")
     .flatMap((m) => m.data.files)
@@ -106,7 +106,7 @@ const browser = await chromium.launch({
   ok(chh.some((f) => f.filename === "测试目录/2026.11.03_测试目录_作者甲.md"), "Chiphell：取消作者目录，MD 文件名保留作者");
   ok(chh.filter((f) => f.text).every((f) => f.text.includes("./images/2026.11.03_测试目录-01.png")), "Chiphell：MD 引用与真实下载路径一致");
   ok(
-    await p.evaluate(() => document.querySelector(".xhx-chh-panel").hidden),
+    await p.evaluate(() => document.querySelector(".xhx-dz-panel").hidden),
     "Chiphell：点击后面板收起，不是「钉住等第二下」"
   );
   await p.close();
