@@ -31,6 +31,7 @@
 | 小红书 | 图文笔记、视频笔记（选清晰度）、实况图、原视频、评论 | 支持「正文」「正文+回复」「图片下载/跳过」 |
 | Chiphell | 论坛帖子正文与全部图片 | 支持「只看楼主」（`authorid`）与跨页翻页 |
 | 远景论坛 | 论坛帖子正文与全部图片 | 与 Chiphell 共用一套 Discuz 引擎，零新增 JS |
+| 微信公众号 | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
 | 少数派 | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | 文章正文、图片、站内视频、评论 | 图片后缀 `.jpg` 不可信，MIME 要还原 |
 
@@ -153,6 +154,25 @@ PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthrea
 
 `PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。
 
+## 公众号：与 Wechat-Sharpen 同构
+
+公众号**不用**小红虾原生的 `<标题>/` + `images/` 结构，而是复刻 Wechat-Sharpen 管线的落盘规范。
+原因很实际：`09-Article` 里已有几十篇该管线的产物，同一个目录出现两套命名就没法用一条 Dataview 查。
+
+| | Wechat-Sharpen | 小红虾公众号 |
+|---|---|---|
+| 目录 | `YYYY-MM/YY-MM-DD/` | 同 |
+| 文件 | `<标题>.md` | 同 |
+| 图片 | `assets/<aid8>_<NNN>_<url8>.<ext>` | 同格式，hash 算法不同 |
+| frontmatter | `title` `source` `published` `created` | 同 |
+| `description` / `tags` | 富化阶段写入 | 留空，交给同一套富化管线 |
+
+两个 hash 都只是「稳定短标识」——同一篇文章、同一张图，多次剪藏得到同一个名字；
+不要求和 Skill 产出的 hash 相同（存量文件的 hash 已定，重名只可能发生在同一天同一篇，实际不会撞）。
+
+**只做单篇手动。** 批量抓取、历史文章导入、订阅推送都留在 Wechat-Sharpen 侧（它有 DB / 书签 / URL 三条来源
+和登录态），扩展这边不碰，避免踩微信的批量抓取条款。
+
 ## 项目结构
 
 ```
@@ -164,6 +184,7 @@ js/
 content/
   index.js|css         小红书：胶囊、面板、评论展开、进度、清晰度、原视频
   discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景）：作者模式、跨页、附件格
+  wechat.js            微信公众号：与 Wechat-Sharpen 同构的落盘规范
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
   format-size.js       体积格式化（1000 进制，不引库）
