@@ -253,14 +253,55 @@ for (let i = 0; i < 30 && !extId; i++) {
 if (extId) {
   const opt = await ctx.newPage();
   await opt.goto(`chrome-extension://${extId}/setting.html`, { waitUntil: "domcontentloaded" });
+  /* 以前这里写死「4 个站点」「v0.6.3」，加站和改版本之后一直红着，
+   * 等于这个文件对站点清单漂移彻底失去警报能力。现在改成跨源对账：
+   *   · 站点域名 ← 与 manifest 的 content_scripts.matches 双向覆盖（少一个就红）
+   *   · 版本号   ← 读 manifest，bump 版本不再误红
+   * setting.html 里那句「顺序与 manifest 一致」也一并守住（非降序即可，不锁死下标）。 */
+  const manifest = JSON.parse(fs.readFileSync(path.join(EXT, "manifest.json"), "utf8"));
+  const mHosts = [];
+  for (const cs of manifest.content_scripts) {
+    for (const pat of cs.matches) {
+      const h = pat.split("//")[1].split("/")[0];
+      if (!mHosts.includes(h)) mHosts.push(h);
+    }
+  }
+  const hostOf = (h) => h.replace(/^\*\./, "");
+  /* code 与 manifest host 是否指同一批域：bbs.pcbeta.com ⊂ *.pcbeta.com 算命中 */
+  const sameDomain = (code, host) => {
+    const h = hostOf(host);
+    return code === h || code.endsWith("." + h) || h.endsWith("." + code);
+  };
+
   const sites = await opt.locator(".sites li strong").allTextContents();
-  ok(sites.length === 4, `设置页列出 4 个站点（${sites.join(" / ")}）`);
+  const codes = await opt.locator(".sites li code").allTextContents();
+  const liCount = await opt.locator(".sites li").count();
+  ok(codes.length === liCount && sites.length === liCount, `每条站点都有名称和域名（${liCount} 条）`);
+
+  const missing = codes.filter((c) => !mHosts.some((h) => sameDomain(c, h)));
+  ok(missing.length === 0, `设置页每个域名都在 manifest 里（缺：${missing.join(" / ") || "无"}）`);
+
+  const unlisted = mHosts.filter((h) => !codes.some((c) => sameDomain(c, h)));
+  ok(
+    unlisted.length === 0,
+    `manifest 每个 host 都在设置页列出来了（漏列：${unlisted.map(hostOf).join(" / ") || "无"}）`
+  );
+
+  const order = codes.map((c) => mHosts.findIndex((h) => sameDomain(c, h)));
+  ok(
+    order.every((v, i) => i === 0 || v >= order[i - 1]),
+    `设置页顺序与 manifest 一致（实际下标 ${order.join(",")}）`
+  );
+
   ok(sites.includes("什么值得买"), "设置页含「什么值得买」");
   ok(
-    (await opt.locator("#site-count").textContent()) === "4",
-    "站点计数由列表数出来，不会与文案漂移"
+    (await opt.locator("#site-count").textContent()) === String(liCount),
+    `站点计数由列表数出来，不会与文案漂移（应有 ${liCount}）`
   );
-  ok((await opt.locator("#version").textContent()) === "v0.6.3", "版本号是 0.6.3");
+  ok(
+    (await opt.locator("#version").textContent()) === "v" + manifest.version,
+    `版本号与 manifest 一致（应为 v${manifest.version}）`
+  );
   const tree = await opt.locator('section[aria-label="下载目录结构"] pre').textContent();
   ok(tree.includes("标题/") && !tree.includes("作者 / 标题"), "设置页目录树不再展示作者一级目录");
   ok(tree.includes("images/") && tree.includes("media/") && tree.includes("comments/"), "设置页展示三个真实媒体子目录");

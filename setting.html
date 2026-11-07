@@ -17,7 +17,9 @@
     <h2>喜欢的内容，<br>留在自己手里。</h2>
     <p class="intro">图片、实况、视频与文字，按统一目录保存。<br>直接下载，无需解压。</p>
     <section aria-label="支持的网站">
-      <p class="section-label">已支持 <span id="site-count">4</span> 个网站</p>
+      <!-- 静态值只是兜底：setting.js 加载后会按 .sites 的条数重写，所以这里写错不会
+           被测试抓到，加站时仍要手动一起改，否则首帧/脚本出错时显示的是假数字。 -->
+      <p class="section-label">已支持 <span id="site-count">11</span> 个网站</p>
       <!-- 顺序与 manifest 的 content_scripts.matches 一致：浏览器扩展详情页按那个顺序列权限，
            两边顺序一样，用户可以从上往下逐条对。 -->
       <ul class="sites">
