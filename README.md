@@ -184,9 +184,9 @@ SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 
 ## 公众号：两套目录树
 
-设置页里可切换，只影响公众号：
+设置页里可切换，只影响公众号（**自用版**带这个开关；发布版固定走「通用」，设置页里没有这一节）：
 
-| | 通用（默认） | 自用 · 对齐 Wechat-Sharpen |
+| | 通用（发布版固定） | 自用 · 对齐 Wechat-Sharpen |
 |---|---|---|
 | 目录 | `<标题>/` | `YYYY-MM/YY-MM-DD/` |
 | 文件 | `YYYY.MM.DD_标题_公众号名.md` | `<标题>.md` |
@@ -194,7 +194,7 @@ SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 | 引用 | `![1](./images/…)` | `![图片](assets/…)` |
 | frontmatter | 来源 / 作者 / 时间 / 类型 / 链接 | title / source / published / created |
 
-「通用」与其他站点完全一致，**发布版默认**。「自用」复刻 Wechat-Sharpen 管线 ——
+「通用」与其他站点完全一致，**发布版固定**。「自用」复刻 Wechat-Sharpen 管线 ——
 `09-Article` 里已有几十篇它的产物，同一目录出现两套命名就没法用一条 Dataview 查。
 
 两个 hash 只是稳定短标识：同一篇文章、同一张图，多次剪藏得到同一个名字；不要求和 Skill 产出的 hash 相同。
