@@ -28,6 +28,10 @@ const db = {
         values.clear();
         return { result: undefined };
       },
+      delete(key) {
+        values.delete(key);
+        return { result: undefined };
+      },
     });
     setTimeout(() => transaction.oncomplete && transaction.oncomplete(), 0);
     return transaction;
@@ -63,6 +67,13 @@ globalThis.chrome = {
       downloads.push(options);
       return downloads.length;
     },
+    /* 后台对小文件（md / comments.json）会等 onChanged 收尾再报成功。
+     * 这里给一个「立即完成」的双：settleDownload 先挂监听、再查一次 search，
+     * 双返回 complete 就走快路径，用例不必真的等 3 秒。 */
+    async search() {
+      return [{ state: "complete" }];
+    },
+    onChanged: { addListener() {}, removeListener() {} },
   },
 };
 
@@ -218,9 +229,18 @@ await route({
   data: { url: "https://cdn.test/origin.mp4", filename: "标题/media/a.mp4", mdFilename: "标题/a.md", md: "# 标题" },
 });
 assert.equal(downloads.length, 2, "原视频与 Markdown 应依次下载");
-assert.ok(downloads[1].url.startsWith("data:text/markdown;charset=utf-8,"));
+assert.ok(downloads[1].url.startsWith("data:text/markdown;base64,"), "md 走 base64 data URL");
+assert.equal(
+  Buffer.from(downloads[1].url.split(",")[1], "base64").toString("utf8"),
+  "# 标题",
+  "base64 data URL 解出来就是原文"
+);
 
-assert.equal(await route({ type: "downloadFiles", data: { files: [{ url: "https://cdn.test/a.jpg", filename: "a.jpg" }] } }), 1);
+assert.deepEqual(
+  await route({ type: "downloadFiles", data: { files: [{ url: "https://cdn.test/a.jpg", filename: "a.jpg" }] } }),
+  { done: 1, failed: [], cancelled: false },
+  "downloadFiles 必须回传成功数与失败清单"
+);
 
 setState(baseNote);
 await route({ type: "clearData" });

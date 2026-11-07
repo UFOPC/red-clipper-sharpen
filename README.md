@@ -258,13 +258,30 @@ node test/unit-kind.mjs
 用例分两类：`unit-*` 在 Node 里直接跑组装与格式化逻辑（打桩 `chrome`），其余用 Playwright 起真实浏览器
 加载扩展、喂真实页面快照、断言下载到的东西。断言围绕上面那两条不变式，不做像素比对。
 
+`unit-*` 全部零依赖，可以直接串起来跑：
+
+```bash
+for f in test/unit-*.mjs; do node "$f" || echo "FAIL $f"; done
+```
+
+其中两个守的是「整篇内容一个字节都不落」的底线：`unit-name`（落盘名的字符清洗与长度闸门——
+Chrome 对非法 filename 是直接 reject，不是截断）与 `unit-download`（md / comments.json
+必须确知写完了才算成功，视频大图不等待）。
+
 页面快照（`test/fixtures/*.html`）因版权原因不入库，缺快照的用例需要你自备。
 
 ## 隐私
 
 - 不采集任何数据，不发遥测，不与任何服务端通信
 - 全部网络请求只发生在你正在浏览的站点与其图片/视频 CDN 上，目的仅是把内容取回来写到本地
-- 只需要 `downloads`（落盘）、`scripting`（注入取数）、`storage`（记住选项）三项权限
+
+权限清单与 `manifest.json` 一一对应：
+
+| 项 | 内容 | 用途 |
+|---|---|---|
+| `permissions` | `downloads` / `scripting` / `storage` / `declarativeNetRequestWithHostAccess` | 落盘；在小红书页 MAIN 世界取原始 note；记住面板选项；只给豆瓣、微博图床补一个 `Referer` 请求头（两条静态规则见 `rules/`） |
+| `host_permissions` | `*.xiaohongshu.com` / `*.doubanio.com` / `*.sinaimg.cn` / `cdnfile.sspai.com` / `cdn-static.sspai.com` | 小红书取数；豆瓣与微博图床由后台代取图片字节（裸请求 418 / 403） |
+| `content_scripts` | 11 个站（见上表） | 只在对应页面注入胶囊与适配层，不额外申请 host 权限 |
 
 ## 免责声明
 

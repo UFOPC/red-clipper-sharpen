@@ -54,7 +54,7 @@ for (const [counts, want] of [
 }
 
 console.log("\n[4] 四站都传了 counts");
-for (const file of ["js/background.js", "content/chiphell.js", "content/sspai.js", "content/smzdm.js"]) {
+for (const file of ["js/background.js", "content/discuz.js", "content/sspai.js", "content/smzdm.js"]) {
   const src = read(file);
   ok(/counts:\s*{/.test(src), `${file} 传了 counts`);
 }

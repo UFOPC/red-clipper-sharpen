@@ -17,6 +17,10 @@ node_modules/
 .cache/
 *.log
 
+# Chrome 用 --load-extension 直接加载本目录时，会把静态 DNR 规则编译成
+# indexed ruleset 写在这里。是浏览器副产物，不是源码。
+_metadata/
+
 # 抓取的页面快照与产物（版权原因不入库）
 test/fixtures/
 test/**/*.html

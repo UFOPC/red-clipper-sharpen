@@ -59,7 +59,7 @@ ok(RN.rel("") === "./", `空路径退化成 ./（实际 "${RN.rel("")}"）`);
 ok(RN.rel("./x.png") === "./x.png", `传进来的 ./ 前缀不会叠加（实际 "${RN.rel("./x.png")}"）`);
 
 console.log("\n[4] 四站脚本与后台都走 rel()，没人再手写『](./』");
-const files = ["js/background.js", "content/chiphell.js", "content/smzdm.js", "content/sspai.js"];
+const files = ["js/background.js", "content/discuz.js", "content/smzdm.js", "content/sspai.js"];
 for (const file of files) {
   const src = read(file);
   /* 注释里可以提到这种写法，只看代码行 */
