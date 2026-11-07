@@ -42,11 +42,11 @@
             "content/discuz.js"
          ],
          "matches": [
-            "*://www.chiphell.com/*",
-            "*://bbs.pcbeta.com/*",
-            "*://www.52pojie.cn/*",
-            "*://www.right.com.cn/*",
-            "*://bbs.erji.net/*"
+            "*://*.chiphell.com/*",
+            "*://*.pcbeta.com/*",
+            "*://*.52pojie.cn/*",
+            "*://*.right.com.cn/*",
+            "*://*.erji.net/*"
          ],
          "run_at": "document_idle"
       },
@@ -115,11 +115,11 @@
       {
          "matches": [
             "*://*.xiaohongshu.com/*",
-            "*://www.chiphell.com/*",
-            "*://bbs.pcbeta.com/*",
-            "*://www.52pojie.cn/*",
-            "*://www.right.com.cn/*",
-            "*://bbs.erji.net/*",
+            "*://*.chiphell.com/*",
+            "*://*.pcbeta.com/*",
+            "*://*.52pojie.cn/*",
+            "*://*.right.com.cn/*",
+            "*://*.erji.net/*",
             "*://*.sspai.com/*",
             "*://post.smzdm.com/*",
             "*://mp.weixin.qq.com/*"
