@@ -1,14 +1,15 @@
-/* 什么值得买：媒体没发出去时，按钮必须说实话
+/* 什么值得买：md 必须只引用真正落盘的媒体
  *
- * 这个用例守两条失败分支——它们是「界面说成功、文件里缺内容」最容易复发的地方：
- *   ① sendMessage reject（扩展重载 / SW 崩溃导致端口断开）：循环被打断，剩下的批次
- *      一张没发，failedWrite 却是空的。以前只 console.warn，按钮照旧显示「已提交」，
- *      用户以为 20/20 都发了。
- *   ② 下载器回 {failed:[…]}：条数可数，显示「N 个媒体未保存」。
+ * 这个用例守三件事——都是「界面说成功、文件里缺内容」的复发点：
+ *   ① md 在媒体之后下发：以前 md 先发，媒体失败补不进正文，正文里的图链指向一批
+ *      并不存在的文件（「引用数 != 落盘数」）。这里断言 md 那条消息确实排在媒体批次之后。
+ *   ② 没落盘的媒体不留引用：失败的那张图从正文里消失，其余图照常引用，并在正文末尾
+ *      写明少了什么——文件自己知道缺了什么，不用回头翻控制台。
+ *   ③ 按钮说实话：部分失败「N 个媒体未保存」，端口断开（sendMessage reject，整批没发、
+ *      连条数都数不出来）「媒体下发中断」，都不许显示「已提交」。
  *
- * md 走的是先落语义，两条分支下都必须照发——这里也一并守住，免得修失败文案时把它弄丢。
- *
- * 桩返回的形状就是 background 的下载协议，不需要真扩展、不需要真网络。
+ * 桩必须回真实生成的文件名：反查是靠 filename 精确比对的，编一个名字会让失败项匹配不到，
+ * 等于绕开被测逻辑（这条坑踩过一次）。
  */
 import { createRequire } from "node:module";
 import fs from "node:fs";
@@ -52,7 +53,7 @@ const browser = await chromium.launch({
   headless: true,
 });
 
-/* mode: "reject" 端口断开 / "partial" 下载器回一条失败 */
+/* mode: "reject" 端口断开 / "partial" 只有第一张落盘失败 */
 async function run(mode) {
   const p = await browser.newPage();
   await p.route("https://post.smzdm.com/p/interrupt1/**", (r) =>
@@ -63,21 +64,27 @@ async function run(mode) {
   await p.addInitScript((m) => {
     window.__mode = m;
     window.__sent = [];
+    window.__md = "";
+    window.__batches = [];
     window.chrome = {
       runtime: {
         getURL: () => "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>",
         onMessage: { addListener() {} },
         sendMessage: (msg) => {
           window.__sent.push(msg);
-          const isMd =
-            msg.data && msg.data.files && msg.data.files[0] && msg.data.files[0].mime === "text/markdown";
-          if (isMd) return Promise.resolve({});
+          const files = (msg.data && msg.data.files) || [];
+          if (msg.type !== "downloadFiles" || !files.length) return Promise.resolve({});
+          /* md 永远成功：本用例只关心媒体那侧 */
+          if (files[0].mime === "text/markdown") {
+            window.__md = files[0].text;
+            return Promise.resolve({});
+          }
+          window.__batches.push(files.map((f) => f.filename));
           if (window.__mode === "reject") {
             return Promise.reject(new Error("Could not establish connection. Receiving end does not exist."));
           }
-          return Promise.resolve({
-            failed: [{ filename: "测试_2026.11.02_测试作者-01.jpg", error: "HTTP 403" }],
-          });
+          /* 回真实文件名：被测代码靠它反查是第几项 */
+          return Promise.resolve({ failed: [{ filename: files[0].filename, error: "HTTP 403" }] });
         },
       },
       storage: { local: { get: (_k, cb) => cb && cb({}), set: () => {} } },
@@ -103,8 +110,16 @@ async function run(mode) {
   );
   const state = await p.evaluate(() => ({
     text: document.querySelector(".xhx-zdm-act[data-comments='0']").textContent,
-    mdSent: window.__sent.some(
+    md: window.__md,
+    batches: window.__batches,
+    /* md 在 __sent 里的位置，与最后一个媒体批次的位置比：md 必须更靠后 */
+    mdAt: window.__sent.findIndex(
       (m) => m.data && m.data.files && m.data.files[0] && m.data.files[0].mime === "text/markdown"
+    ),
+    lastMediaAt: window.__sent.reduce(
+      (last, m, i) =>
+        m.type === "downloadFiles" && m.data.files[0] && m.data.files[0].mime !== "text/markdown" ? i : last,
+      -1
     ),
   }));
   await p.close();
@@ -113,12 +128,27 @@ async function run(mode) {
 
 console.log("\n[1] sendMessage reject（端口断开）");
 const a = await run("reject");
-ok(a.mdSent, "md 仍然发出了（先落 md 的语义没被破坏）");
+ok(a.mdAt > a.lastMediaAt, `md 仍排在媒体之后（md@${a.mdAt} > media@${a.lastMediaAt}）`);
+ok(/有 3 项媒体未能保存（下发中断）/.test(a.md), "中断写进了正文：3 项全部标注未保存");
+ok(!/images\//.test(a.md), "一张引用都不留（没确认落盘就不指向任何文件）");
 ok(a.text === "媒体下发中断", `按钮显示「媒体下发中断」（实际「${a.text}」）`);
 ok(a.text !== "已提交", "不再谎报已提交");
 
-console.log("\n[2] 下载器回 {failed:[1 条]}");
+console.log("\n[2] 下载器回 {failed:[第一张]}");
 const b = await run("partial");
+ok(b.batches.length && b.batches[0].length === 3, `三个图一批发出（实际 ${b.batches[0] && b.batches[0].length}）`);
+ok(b.mdAt > b.lastMediaAt, `md 排在媒体批次之后（md@${b.mdAt} > media@${b.lastMediaAt}）`);
+
+/* 批次里是「标题/images/…」，正文里是「images/…」，只能按 basename 比——
+ * 整串比会永远不中，让「失败那张没被引用」变成假通过。
+ * 另外注记行本身会写出失败文件名（…（HTTP 403）），所以判「有没有引用」必须排除 > 开头的行。 */
+const base = (f) => String(f || "").split("/").pop();
+const bodyOnly = b.md.split("\n").filter((line) => !line.trimStart().startsWith(">")).join("\n");
+const [f1, f2, f3] = b.batches[0] || [];
+ok(f1 && !bodyOnly.includes(base(f1)), `失败那张不出现在正文里（${base(f1)}）`);
+ok(f2 && bodyOnly.includes(base(f2)) && f3 && bodyOnly.includes(base(f3)), "其余两张照常引用");
+ok(/有 1 项媒体未能保存/.test(b.md), "正文写明了少了 1 项");
+ok(b.md.includes("HTTP 403"), "正文带上了失败原因");
 ok(b.text === "1 个媒体未保存", `按钮显示「1 个媒体未保存」（实际「${b.text}」）`);
 
 await browser.close();

@@ -329,13 +329,75 @@
       }
     }
 
+    /* 三、先发媒体，md 最后落。以前是 md 先发、媒体后发，媒体失败补不进正文，
+     * 正文里的图链就指向一批并不存在的文件——「引用数 != 落盘数」。
+     * 代价没有想象中大：视频字节在第二步已经抓完（grabVideo），这里只把 md 挪后不到一秒。 */
+    const failedWrite = [];
+    const written = new Set();
+    /* 端口断开（扩展重载、SW 崩溃）时 sendMessage 是 reject 而不是回 {failed}，
+     * 循环被打断、剩下的批次一张没发，failedWrite 却是空的——必须单独记一笔，
+     * 否则 UI 会显示「已提交」，用户以为 20/20 都发了。 */
+    let mediaError = "";
+    if (withMedia) {
+      try {
+        let done = 0;
+        for (let i = 0; i < total; i += BATCH) {
+          const batch = [];
+          const batchIdx = [];
+          for (let j = i; j < Math.min(i + BATCH, total); j++) {
+            if (!srcs[j]) continue;
+            batch.push({ filename: layout.prefix + names[j], url: srcs[j] });
+            batchIdx.push(j);
+          }
+          if (batch.length) {
+            const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
+            const bad = new Set();
+            if (wrote && wrote.failed) {
+              failedWrite.push(...wrote.failed);
+              for (const f of wrote.failed) {
+                /* 反查是第几项：文件名是我们自己拼的，精确比对就够；
+                 * 对不上就当这批都写成了——宁可正文多留一条引用，也不误删。 */
+                const hit = batchIdx.find((j) => layout.prefix + names[j] === (f && f.filename));
+                if (hit != null) bad.add(hit);
+              }
+            }
+            for (const j of batchIdx) if (!bad.has(j)) written.add(j);
+          }
+          done += batch.length;
+          if (onProgress) onProgress(done, total);
+        }
+      } catch (e) {
+        mediaError = "媒体下发中断";
+        console.warn("小红虾 · 媒体下发中断", e);
+      }
+      if (failedWrite.length) console.warn("小红虾 · 媒体未能保存（正文已略去对应引用）", failedWrite);
+    }
+
+    /* 没落盘的媒体不留引用：宁可正文里少一张图，也不能让它指向不存在的文件。 */
+    const missing = [];
     let body = info.body.replace(/\u0000(\d+)\u0000/g, (_, n) => {
-      const name = names[Number(n)];
-      return name ? `![${Number(n) + 1}](${RN.rel(name)})` : "";
+      const idx = Number(n);
+      const name = names[idx];
+      if (!name) return "";
+      if (withMedia && !written.has(idx)) {
+        if (!missing.includes(idx + 1)) missing.push(idx + 1);
+        return "";
+      }
+      return `![${idx + 1}](${RN.rel(name)})`;
     });
 
     if (failed.length) {
       body += "\n\n> 视频未能取到字节（" + failed.join("；") + "），已按原始地址交给浏览器下载；若下载栏提示没有权限，就是站方防盗链拦了裸请求。";
+    }
+
+    /* 少了哪几张也必须落在正文里，否则文件自己不知道缺了什么。 */
+    if (missing.length) {
+      const why = mediaError
+        ? "下发中断"
+        : failedWrite.length
+          ? RN.writeFailNote(failedWrite, 3)
+          : "未知原因";
+      body += "\n\n> 有 " + missing.length + " 项媒体未能保存（" + why + "），正文中已略去对应引用。";
     }
 
     if (withComments) {
@@ -360,9 +422,7 @@
       media: [],
     });
 
-    /* 三、md 先发。视频抓字节要几秒，媒体又是批量发的，md 放在最后就会出现
-     * 「视频已经下来了、MD 还没来」，看着像 md 丢了。正文是主体，先落它。
-     * 媒体那一步再出错也不该影响已经落地的 md，所以单独 try。 */
+    /* 四、最后发 md。走到这里，它引用的每一张图都已经确认落盘。 */
     const mdRes = await chrome.runtime.sendMessage({
       type: "downloadFiles",
       data: { files: [{ filename: layout.md, text: md, mime: "text/markdown" }] },
@@ -371,37 +431,6 @@
      * 判据与豆瓣/微博/少数派/下厨房一致：filename 精确比对，不看 failed 条数。 */
     const mdSaved = !(mdRes && mdRes.failed && mdRes.failed.some((f) => f && f.filename === layout.md));
 
-    /* 四、再发媒体。 */
-    const failedWrite = [];
-    /* 端口断开（扩展重载、SW 崩溃）时 sendMessage 是 reject 而不是回 {failed}，
-     * 循环被打断、剩下的批次一张没发，failedWrite 却是空的——必须单独记一笔，
-     * 否则 UI 会显示「已提交」，用户以为 20/20 都发了。 */
-    let mediaError = "";
-    if (withMedia) {
-      try {
-        let done = 0;
-        for (let i = 0; i < total; i += BATCH) {
-          const batch = [];
-          for (let j = i; j < Math.min(i + BATCH, total); j++) {
-            if (!srcs[j]) continue;
-            batch.push({ filename: layout.prefix + names[j], url: srcs[j] });
-          }
-          if (batch.length) {
-            const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
-            /* md 已经先落地了，这批失败补不进正文，只能交给 UI 交代条数。 */
-            if (wrote && wrote.failed) failedWrite.push(...wrote.failed);
-          }
-          done += batch.length;
-          if (onProgress) onProgress(done, total);
-        }
-      } catch (e) {
-        mediaError = "媒体下发中断（md 已落地）";
-        console.warn("小红虾 · 媒体下发中断（md 已落地）", e);
-      }
-      /* md 已先落地，这批失败补不进正文（改 md 就得把它挪到媒体之后，得不偿失），
-       * 只留一条完整清单在控制台备查。 */
-      if (failedWrite.length) console.warn("小红虾 · 媒体落盘失败（md 已落地，正文引用可能指向缺失文件）", failedWrite);
-    }
     return { media: withMedia ? total : 0, md: layout.md, mdSaved, failedWrite, mediaError };
   }
 
