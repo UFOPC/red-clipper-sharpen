@@ -35,14 +35,15 @@
       },
       {
          "css": [
-            "content/chiphell.css"
+            "content/discuz.css"
          ],
          "js": [
             "js/rn-format.js",
-            "content/chiphell.js"
+            "content/discuz.js"
          ],
          "matches": [
-            "*://www.chiphell.com/*"
+            "*://www.chiphell.com/*",
+            "*://bbs.pcbeta.com/*"
          ],
          "run_at": "document_idle"
       },
@@ -74,7 +75,7 @@
          "run_at": "document_idle"
       }
    ],
-   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell 帖子图片、少数派文章、什么值得买文章，保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
+   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景论坛帖子、少数派文章、什么值得买文章保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
    "host_permissions": [
       "*://*.xiaohongshu.com/*",
       "*://cdnfile.sspai.com/*",
@@ -94,12 +95,13 @@
       "scripting",
       "storage"
    ],
-   "version": "0.6.3",
+   "version": "0.7.0",
    "web_accessible_resources": [
       {
          "matches": [
             "*://*.xiaohongshu.com/*",
             "*://www.chiphell.com/*",
+            "*://bbs.pcbeta.com/*",
             "*://sspai.com/*",
             "*://www.sspai.com/*",
             "*://post.smzdm.com/*"

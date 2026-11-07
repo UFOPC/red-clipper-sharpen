@@ -1,0 +1,194 @@
+/* 按钮和面板共用一个 fixed 容器：
+ * ① 面板跟着按钮走，不用两处各写一遍坐标；
+ * ② mouseleave 按 DOM 归属判定，容器内的空隙不会误触发收起。 */
+.xhx-dz-dock {
+  position: fixed;
+  top: 236px;            /* 会被 JS 按站方页头实际高度改写 */
+  right: 24px;
+  z-index: 2147483646;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.xhx-dz-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid #ef493d;
+  border-radius: 999px;
+  background: #fff;
+  color: #ef493d;
+  font: 500 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+  transition: background .2s;
+}
+
+.xhx-dz-btn:hover {
+  background: #fff5f4;
+}
+
+.xhx-dz-btn.is-busy {
+  opacity: .6;
+  cursor: default;
+}
+
+.xhx-dz-btn img {
+  width: 20px;
+  height: 20px;
+}
+
+.xhx-dz-panel {
+  box-sizing: border-box;
+  width: 128px;
+  padding: 14px;
+  border: 1px solid rgba(0, 0, 0, .09);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .06);
+  color: #1f2328;
+  font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  text-align: left;
+}
+
+.xhx-dz-panel[hidden] {
+  display: none;
+}
+
+/* 标签在上、控件占满整行。
+ * 面板收到 180 后，标签和分段控件挤在一行会把按钮文字压成竖排
+ * （「含回复」→ 含/回/复），所以改成分两行。 */
+.xhx-dz-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* 左边「图片」，右边张数 */
+.xhx-dz-key {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2328;
+}
+
+.xhx-dz-key .cnt {
+  font-size: 11px;
+  font-weight: 400;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.xhx-dz-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #f3f4f6;
+}
+
+.xhx-dz-seg button {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.xhx-dz-seg button:hover {
+  color: #ef493d;
+}
+
+.xhx-dz-seg button.is-on {
+  background: #fff;
+  color: #ef493d;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .1);
+}
+
+/* 两个动作竖排、各占整行：跟小红书图文贴一样，上面选要不要图，下面选存到哪儿为止 */
+.xhx-dz-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.xhx-dz-actions button {
+  height: 32px;
+  margin: 0;
+  padding: 0 13px;
+  border-radius: 16px;
+  font: inherit;
+  /* 跟另外三个站对齐：13px / 500。原来的 12.5px 是 Chiphell 自己一套，
+   * 而 .xhx-dz-go 里的 600 又被这里的 font:inherit 按特异性压掉了，实际一直是 400。 */
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.xhx-dz-go {
+  border: 0;
+  background: #ef493d;
+  color: #fff;
+}
+
+.xhx-dz-go:hover {
+  background: #d93d32;
+}
+
+.xhx-dz-go.is-ghost {
+  border: 1px solid #ef493d;
+  background: transparent;
+  color: #ef493d;
+}
+
+.xhx-dz-go.is-ghost:hover {
+  background: #fff5f4;
+}
+
+.xhx-dz-panel button:focus-visible,
+.xhx-dz-btn:focus-visible {
+  outline: 2px solid #ef493d;
+  outline-offset: 2px;
+}
+
+.xhx-dz-status {
+  max-width: 320px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .78);
+  color: #fff;
+  font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+.xhx-dz-status:empty {
+  display: none;
+}
+
+.xhx-dz-status:not(:empty) {
+  opacity: 1;
+}

@@ -1,6 +1,6 @@
 # 小红虾 · 下载助手
 
-> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、Chiphell 帖子、少数派文章、什么值得买文章，
+> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、Chiphell / 远景论坛帖子、少数派文章、什么值得买文章，
 > 连同图片、视频、评论，存成一份带 YAML frontmatter 的 Markdown + 分类媒体目录。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
@@ -30,6 +30,7 @@
 |---|---|---|
 | 小红书 | 图文笔记、视频笔记（选清晰度）、实况图、原视频、评论 | 支持「正文」「正文+回复」「图片下载/跳过」 |
 | Chiphell | 论坛帖子正文与全部图片 | 支持「只看楼主」（`authorid`）与跨页翻页 |
+| 远景论坛 | 论坛帖子正文与全部图片 | 与 Chiphell 共用一套 Discuz 引擎，零新增 JS |
 | 少数派 | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | 文章正文、图片、站内视频、评论 | 图片后缀 `.jpg` 不可信，MIME 要还原 |
 
@@ -128,6 +129,30 @@ S101峡谷两日游/
 **值得买的评论作者。** 页面上 `.display-nickname` 出现 40 次，全是**评论**作者；正文作者只在
 `meta[property="article:author"]` 里。
 
+## 加一个 Discuz 站
+
+Discuz! X3 的帖子页结构在各站之间高度一致，所以四个 Discuz 站共用 `content/discuz.js` 一份引擎：
+正文 `td.t_f[id^="postmessage_"]`、作者 `.authi .xw1`、发帖时间 `em[id^="authorposton"]`、
+附件格 `.pattl / .tattl`、引用 `.quote`、翻页 `.pg a`、面包屑 `#pt`。
+
+新增站点只要两处改动：
+
+1. `content/discuz.js` 顶部的 `SITES` 里加一条 —— 域名正则、`source` 名、`parse()`（URL → tid/page/authorid）、
+   `pageUrl()`（翻页地址）。**不需要写新的 content script。**
+2. `manifest.json` 的 `matches` 与 `web_accessible_resources.matches` 加上该域名。
+
+改完用两个脚本验：
+
+```bash
+# 老站回归：新旧适配层输出必须逐字节一致（37 个文件 / 36 张图）
+PW=… PW_EXE=… node test/regress-discuz.mjs <旧版目录> <新版目录> <帖子快照.html>
+
+# 新站实跑：真页面打开 → 注入 → 点胶囊 → 断言正文与 frontmatter
+PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthread-1079227-1-1.html
+```
+
+`PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。
+
 ## 项目结构
 
 ```
@@ -138,7 +163,7 @@ js/
   setting.js|css       设置页（站点列表与版本号）
 content/
   index.js|css         小红书：胶囊、面板、评论展开、进度、清晰度、原视频
-  chiphell.js|css      Chiphell：Discuz X3 结构，含作者模式与跨页
+  discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景）：作者模式、跨页、附件格
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
   format-size.js       体积格式化（1000 进制，不引库）
