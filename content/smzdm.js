@@ -528,7 +528,7 @@
             act.textContent = "md 未保存";
             hold = 4000;
           } else if (failedCount) {
-            act.textContent = "已提交（" + failedCount + " 个失败）";
+            act.textContent = failedCount + " 个媒体未保存";
             hold = 4000;
           } else {
             act.textContent = "已提交";
