@@ -96,7 +96,7 @@ S101峡谷两日游/
     └── 2026.08.03_S101峡谷两日游-01-c2.png
 ```
 
-四个站点共用这套结构。`comments/` 示例中的 `01` 是所属一级评论序号，二级评论沿用所属一级评论的序号；`cN` 是整篇内容内全局递增的评论图序号，不按单条评论重置。
+所有站点共用这套结构。`comments/` 示例中的 `01` 是所属一级评论序号，二级评论沿用所属一级评论的序号；`cN` 是整篇内容内全局递增的评论图序号，不按单条评论重置。
 
 ```yaml
 ---
@@ -119,7 +119,7 @@ S101峡谷两日游/
    而 CommonMark 的链接目标会被这些字符截断或拆坏。因此写入 `images/`、`media/`、`comments/` 的引用仍统一经过 URI 转义。
    （不能用 `encodeURIComponent`：它对 `( ) ' ! *` 一个都不转，括号留在路径里照样把链接拆坏。）
 
-## 四个站点的坑（实测记录）
+## 各站点的坑（实测记录）
 
 **少数派的防盗链。** `chrome.downloads.download` 发出的请求带不上 Referer，而 `declarativeNetRequest` 的
 `modifyHeaders` 对下载请求完全无效 —— 那是浏览器进程直接发的，不经扩展能改写的链路。解法是内容脚本先
@@ -194,7 +194,7 @@ SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 | 引用 | `![1](./images/…)` | `![图片](assets/…)` |
 | frontmatter | 来源 / 作者 / 时间 / 类型 / 链接 | title / source / published / created |
 
-「通用」与其他四个站完全一致，**发布版默认**。「自用」复刻 Wechat-Sharpen 管线 ——
+「通用」与其他站点完全一致，**发布版默认**。「自用」复刻 Wechat-Sharpen 管线 ——
 `09-Article` 里已有几十篇它的产物，同一目录出现两套命名就没法用一条 Dataview 查。
 
 两个 hash 只是稳定短标识：同一篇文章、同一张图，多次剪藏得到同一个名字；不要求和 Skill 产出的 hash 相同。
@@ -208,17 +208,20 @@ SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 ## 项目结构
 
 ```
-manifest.json          MV3 清单：四个 content script + 一个 service worker
+manifest.json          MV3 清单：8 个 content script / 11 个站点 + 一个 service worker
 js/
   background.js        消息路由、IndexedDB 暂存、小红书取数与组装
-  rn-format.js         命名 / frontmatter / 图文混排 / 清晰度档位，四个站共用
+  rn-format.js         命名 / frontmatter / 图文混排 / 清晰度档位，所有站点共用
   setting.js|css       设置页（站点列表与版本号）
 content/
   index.js|css         小红书：胶囊、面板、评论展开、进度、清晰度、原视频
-  discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景）：作者模式、跨页、附件格
+  discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景 / 恩山 / 耳机大家坛）：作者模式、跨页、附件格
+  douban.js|css        豆瓣：影评长文，图片经后台补 Referer 取字节
   wechat.js            微信公众号：与 Wechat-Sharpen 同构的落盘规范
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
+  weibo.js|css         微博：单条图文，图片升级到 `/large/` 原图
+  xiachufang.js|css    下厨房：菜谱解析，剥掉缩略图转码指令
   format-size.js       体积格式化（1000 进制，不引库）
 setting.html           设置页
 test/                  Playwright 端到端用例
