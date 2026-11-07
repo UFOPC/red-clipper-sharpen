@@ -486,6 +486,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         return undefined;
       }
+      case "fetchMedia": {
+        /* 图床只认页面 Referer 时，内容脚本的 fetch 既被 CORS 拦、带不了来源，
+         * 而这里（带 host 权限 + rules/media-referer.json 补 Referer）能拿到 200。
+         * 取回字节再交给内容脚本拼 data: URL，绕开跨域读取限制。 */
+        const url = message.data && message.data.url;
+        if (!url) return { ok: false, error: "missing url" };
+        const response = await fetch(url);
+        if (!response.ok) return { ok: false, error: "HTTP " + response.status };
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        return {
+          ok: true,
+          type: response.headers.get("content-type") || "image/png",
+          base64: btoa(binary),
+        };
+      }
       case "clearData":
         await clearFiles();
         return undefined;
@@ -495,3 +515,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   })().then(sendResponse, (error) => sendResponse({ error: String(error && error.message || error) }));
   return true;
 });
+
+/* 图床放行规则走静态声明（manifest 的 declarative_net_request → rules/media-referer.json），
+ * 不在这里动态注册：静态规则在扩展加载时就生效，不依赖 service worker 被唤醒。
+ * 只补 Referer 请求头，不试图改响应头绕 CORS —— 实测改响应头对页面内 fetch 的 CORS 检查无效，
+ * 但补 Referer 后后台 fetch 能直接 200，所以字节统一由 background 代取。 */

@@ -65,6 +65,9 @@
       id: "52pojie",
       host: /^(?:www\.)?52pojie\.cn$/i,
       source: "吾爱破解",
+      /* attach.52pojie.cn 对裸请求返回 403 text/html —— 下载器拿到的是一段报错页，
+       * 存成 .png 打开才发现是 HTML。必须由内容脚本带 Referer 取字节。 */
+      mediaReferer: true,
       parse(loc) {
         const params = new URLSearchParams(loc.search);
         const m = loc.pathname.match(/^\/thread-(\d+)-(\d+)-(\d+)\.html$/);
@@ -413,6 +416,22 @@
     return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
+  /* 有些站的附件域名对裸请求回 403（52pojie 实测：裸请求 105 字节 text/html，
+   * 带 Referer 才 200 image/png）。下载器发的是裸请求，页面里的 fetch 又被 CORS 拦，
+   * 所以字节交给后台代取（静态规则补 Referer），这里只负责换成 data: URL。
+   * 取不到就保留原地址，让下载器按老样子再试一次（不阻断整体保存）。 */
+  async function inlineMedia(files) {
+    for (const file of files) {
+      try {
+        const result = await chrome.runtime.sendMessage({ type: "fetchMedia", data: { url: file.url } });
+        if (!result || !result.ok || !/^image\//.test(result.type || "")) continue;
+        file.url = `data:${result.type};base64,${result.base64}`;
+      } catch (e) {
+        /* 退回原地址 */
+      }
+    }
+  }
+
   async function build(options = prefs) {
     const { articlePosts, comments, meta } = await collectAll(options);
     const layout = RN.layout(meta.title, meta.author, meta.timeMs);
@@ -432,6 +451,7 @@
       filename: layout.prefix + RN.mediaPath(layout.mediaStem, index + 1, extOf(url)),
       url,
     }));
+    if (SITE.mediaReferer) await inlineMedia(files);
 
     const parts = [
       RN.frontmatter({

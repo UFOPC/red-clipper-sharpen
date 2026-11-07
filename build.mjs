@@ -27,6 +27,7 @@ const INCLUDE = [
   "js/rn-format.js",
   "js/setting.js",
   "js/setting.css",
+  "rules/media-referer.json",
   "content/index.js",
   "content/index.css",
   "content/format-size.js",

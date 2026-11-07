@@ -58,7 +58,10 @@ try {
 
   console.log(`✓ ${await page.title()}`);
   console.log(`  md      ${md.filename}`);
-  console.log(`  媒体    ${media.length} 个${media.length ? "，示例 " + media[0].filename : "（本帖无图）"}`);
+  const kind = media[0]
+    ? (media[0].url.startsWith("data:") ? "data:" + media[0].url.slice(5, 16) : "http " + media[0].url.slice(0, 50))
+    : "";
+  console.log(`  媒体    ${media.length} 个${media.length ? "，示例 " + media[0].filename + " | " + kind : "（本帖无图）"}`);
   console.log(`  frontmatter:\n${md.text.split("\n---")[0].split("\n").map((l) => "    " + l).join("\n")}`);
   console.log(`  正文首行 ${JSON.stringify(md.text.split("\n").find((l) => l.startsWith("# ")))}`);
   console.log(`  评论段  ${md.text.includes("## 评论") ? "有" : "无"}`);
