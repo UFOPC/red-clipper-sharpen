@@ -1,0 +1,127 @@
+/* 下厨房适配：入口胶囊 + 保存面板
+ * 视觉与其它站一致（透明胶囊、白卡片、珊瑚主色），独立成文件——各站 content script 各注各的 CSS。
+ * 胶囊挂在标题容器里，所以字号/高度都比少数派那套小一号，免得把标题行撑开。
+ */
+.xcf-xhx-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.xcf-xhx-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid #ef493d;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 400 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #ef493d;
+  transition: background 0.18s;
+}
+.xcf-xhx-entry:hover { background: #fff5f4; }
+.xcf-xhx-entry img { width: 16px; height: 16px; display: block; pointer-events: none; }
+.xcf-xhx-entry span { font-size: 12px; font-weight: 500; white-space: nowrap; }
+
+/* 面板 128px：内容只有「图片 / 下载·跳过 / 保存」，与少数派同一套尺寸 */
+.xcf-xhx-panel {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 0;
+  z-index: 1002;
+  display: none;
+  width: 128px;
+  padding: 13px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+  text-align: left;
+  font: 400 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2328;
+}
+/* 胶囊与面板之间 9px 是死区，用透明伪元素并进命中区，否则鼠标横穿会掉 hover */
+.xcf-xhx-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.xcf-xhx-slot.is-open .xcf-xhx-panel,
+.xcf-xhx-slot.is-pinned .xcf-xhx-panel { display: block; }
+
+.xcf-xhx-qhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2328;
+}
+.xcf-xhx-qhead .cnt { font-size: 11px; font-weight: 400; color: #6b7280; font-variant-numeric: tabular-nums; }
+
+.xcf-xhx-seg {
+  display: flex;
+  gap: 2px;
+  margin-top: 7px;
+  padding: 2px;
+  border-radius: 9px;
+  background: #f3f4f6;
+}
+/* 豆瓣正文区是浅色，button 不显式给 color 会走 UA 默认值 */
+.xcf-xhx-seg button {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.xcf-xhx-seg button:hover { color: #ef493d; }
+.xcf-xhx-seg button.is-on {
+  background: #fff;
+  color: #ef493d;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.xcf-xhx-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; }
+
+.xcf-xhx-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  border: 1px solid #ef493d;
+  border-radius: 16px;
+  background: #ef493d;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.xcf-xhx-act:hover { background: #d6382d; border-color: #d6382d; }
+.xcf-xhx-act[disabled] { opacity: 0.6; cursor: default; }
+.xcf-xhx-act[disabled]:hover { background: #ef493d; border-color: #ef493d; }

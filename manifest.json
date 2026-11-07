@@ -114,9 +114,22 @@
             "content/weibo.js"
          ],
          "run_at": "document_idle"
+      },
+      {
+         "matches": [
+            "*://*.xiachufang.com/*"
+         ],
+         "css": [
+            "content/xiachufang.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/xiachufang.js"
+         ],
+         "run_at": "document_idle"
       }
    ],
-   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景 / 恩山 / 耳机大家坛帖子、豆瓣影评、少数派文章、什么值得买文章、微信公众号文章、单条微博保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
+   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景 / 恩山 / 耳机大家坛帖子、豆瓣影评、少数派文章、什么值得买文章、微信公众号文章、单条微博、下厨房菜谱保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
    "host_permissions": [
       "*://*.xiaohongshu.com/*",
       "*://cdnfile.sspai.com/*",
@@ -153,7 +166,8 @@
             "*://post.smzdm.com/*",
             "*://m.weibo.cn/status/*",
             "*://m.weibo.cn/detail/*",
-            "*://mp.weixin.qq.com/*"
+            "*://mp.weixin.qq.com/*",
+            "*://*.xiachufang.com/*"
          ],
          "resources": [
             "icons/icon.svg"

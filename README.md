@@ -38,11 +38,13 @@
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
 | 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
 | 微博 | `m.weibo.cn` | 单条图文 / 组图，取 `/large/` 原图 | 只接 `/status/<id>` 与 `/detail/<id>`；视频封面不算配图，不下视频 |
+| 下厨房 | `xiachufang.com` | 菜谱简介、用料表、逐步图、成品图 | 图片剥掉 `?imageView2/…` 取原图；CDN 裸请求即 200，无需 Referer |
 
 > 表格、弹窗、`manifest.content_scripts.matches` 三处**顺序一致**。浏览器扩展详情页按 manifest 的
 > 顺序逐条列出 `*://*.<域名>/*`，扩展改不了那串文案，但可以保证顺序对得上，从上往下逐条能对上号。
 > 末尾另有多出来两行 `*://*.doubanio.com/*` / `*://*.sinaimg.cn/*`（图床的 host 权限），
 > 是浏览器自动补在 `content_scripts.matches` 之后的。
+> 下厨房详情页有滑块风控，脚本化访问会拿到验证页，它的回归用例喂的是用户保存的页面快照。
 
 ## 安装
 
@@ -165,6 +167,9 @@ PW=… PW_EXE=… node test/e2e-real-douban.mjs https://movie.douban.com/review/
 
 # 微博：断言图片已升级成 /large/ 且拿到真字节（裸请求会 403）
 PW=… PW_EXE=… node test/e2e-real-weibo.mjs https://m.weibo.cn/status/5359048358626912
+
+# 下厨房：站方滑块风控拦自动化，改用本地页面快照离线跑
+SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 ```
 
 `PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。

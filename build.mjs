@@ -54,6 +54,8 @@ const INCLUDE = [
   "content/smzdm.css",
   "content/wechat.js",
   "content/weibo.js",
+  "content/xiachufang.js",
+  "content/xiachufang.css",
   "content/weibo.css",
   "icons/icon.svg",
   "icons/icon16.png",
