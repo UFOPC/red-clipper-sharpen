@@ -138,6 +138,50 @@ Video URLs are signed (`?t=…&sign=…`) and **must not** be rewritten to anoth
 
 **SMZDM's comment authors.** `.display-nickname` appears 40 times on the page and all of them are **comment** authors; the body author exists only in `meta[property="article:author"]`.
 
+## Add a Discuz site
+
+Discuz! X3 thread pages are consistent enough that the four Discuz sites (Chiphell, PCbeta, Enshan, Erji) share a single engine, `content/discuz.js`: body `td.t_f[id^="postmessage_"]`, author `.authi .xw1`, posted time `em[id^="authorposton"]`, attachment grid `.pattl / .tattl`, quotes `.quote`, pagination `.pg a`, breadcrumb `#pt`.
+
+Adding a site takes two edits and **no new content script**:
+
+1. Add an entry to the `SITES` table at the top of `content/discuz.js` — a `host` regex, a `source` label, `parse()` (URL → tid / page / authorId) and `pageUrl()` (the pagination URL).
+2. Add the domain to **both** `content_scripts.matches` and `web_accessible_resources[].matches` in `manifest.json`.
+
+Those two lists do not follow the same rules, and confusing them breaks the whole extension:
+
+| | `content_scripts.matches` | `web_accessible_resources[].matches` |
+|---|---|---|
+| Path patterns | allowed | **rejected** — origin-level `*://<host>/*` only |
+| Real example | `*://m.weibo.cn/status/*`, `*://post.smzdm.com/p/*` | `*://m.weibo.cn/*`, `*://post.smzdm.com/*` |
+
+Copying a path-level pattern into the second list makes Chrome refuse to load the extension with `Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.` `build.mjs` validates both lists, so a bad pattern fails the build instead of the install.
+
+Verify with the regression scripts:
+
+```bash
+# Old vs new engine must produce byte-identical output
+PW=… PW_EXE=… node test/regress-discuz.mjs <old-dir> <new-dir> <thread-snapshot.html>
+
+# New site on a real page: open → inject → click → assert body and frontmatter
+PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthread-1079227-1-1.html
+```
+
+## WeChat: two layouts
+
+WeChat articles can be written in either layout. The switch exists **only in the self-use build**: the release build strips that section from the settings page and always uses the native layout.
+
+| | Native (release-fixed) | Self-use · aligned with Wechat-Sharpen |
+|---|---|---|
+| Folder | `<title>/` | `YYYY-MM/YY-MM-DD/` |
+| File | `YYYY.MM.DD_<title>_<account>.md` | `<title>.md` |
+| Images | `images/<…>-01.png` | `assets/<aid8>_<NNN>_<url8>.<ext>` |
+| References | `![1](./images/…)` | `![image](assets/…)` |
+| frontmatter | `来源 / 作者 / 时间 / 类型 / 链接` | `title / source / published / created` |
+
+Native output matches every other site. The self-use layout reproduces the Wechat-Sharpen pipeline because an existing `09-Article` folder already holds dozens of its files — two naming schemes in one folder break a single Dataview query.
+
+The switch writes `layout` into `chrome.storage.local`; the content script reads it once at page load, so **reload the article page** after flipping it.
+
 ## Project structure
 
 ```
@@ -175,6 +219,8 @@ Content scripts talk to the service worker via `chrome.runtime.sendMessage`:
 | `clearData` / `cancel` | — | Clears staging / cancels the current save |
 
 Staging uses IndexedDB rather than memory: MV3 service workers get recycled, and in-memory variables do not survive a cancellation or an idle period.
+
+**Anti-hotlink protection comes in two flavours.** For SSPAI, a `fetch` from the content script is enough: it carries the page origin, the CDN answers 200, and the bytes reach the downloader as a `data:` URL. `declarativeNetRequest` cannot solve this on its own — `chrome.downloads` requests are issued by the browser process, so `modifyHeaders` never sees them. The other flavour really needs a `Referer`, and an in-page `fetch` is blocked by CORS: Douban's image host (`doubanio.com`, 418 without it) and Weibo's (`sinaimg.cn`, 403) fall here. Those go through a static DNR rule that sets the header plus `fetchMedia`, which pulls the bytes in the service worker and inlines them as a `data:` URL. The rules live in `rules/douban-referer.json` and `rules/weibo-referer.json` and are scoped to `xmlhttprequest` only, so they never rewrite an image you open directly. Where a CDN serves a plain URL to anyone (Xiachufang), the URL is handed straight to the downloader with no fetch at all.
 
 ## Tests
 
