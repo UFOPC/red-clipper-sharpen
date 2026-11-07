@@ -16,6 +16,7 @@
  *   ③ 一直 in_progress → 超时按成功，且**耗时 ≥ 3000ms**（证明等待真的发生）
  *   ④ 大图 → **耗时 < 100ms**（证明根本没走等待）
  *   ⑤ comments.json 同样走等待，并且**事件一到就收尾**（不等满 3 秒）
+ *   ⑥ 事件全错过、3s 后才是 interrupted → 超时点的终局校验必须抓到（否则误报成功）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -33,6 +34,8 @@ const ok = (cond, msg) => {
 /* ---------- 可编程的 chrome 桩 ----------
  * plan 是队列：每次 downloads.download 消费一条，描述这个 id 的结局。
  *   search   —— search({id}) 回报的 state（complete / interrupted / in_progress）
+ *   searchSeq—— 按次覆盖 search 的返回值（数组，每次调用 shift 一个；元素可为 state
+ *               字符串或 {state,error}），用来测「首次 in_progress、超时点才 interrupted」
  *   error    —— 上面那条 state 对应的 error code
  *   emit     —— 主动发一次 onChanged（{state, error, after:毫秒}），用来测事件路径
  */
@@ -63,8 +66,20 @@ globalThis.chrome = {
     },
     async search({ id: wanted }) {
       const spec = states.get(wanted) || {};
-      const item = { state: spec.search || "complete" };
-      if (spec.error) item.error = spec.error;
+      let state = spec.search || "complete";
+      let error = spec.error;
+      /* searchSeq 按调用顺序消费：第 1 次是监听落地兜竞态，第 2 次是 3s 超时点的终局校验。
+       * 元素可以是 state 字符串，也可以是 { state, error }。 */
+      if (Array.isArray(spec.searchSeq) && spec.searchSeq.length) {
+        const next = spec.searchSeq.shift();
+        if (typeof next === "string") state = next;
+        else if (next && typeof next === "object") {
+          state = next.state || state;
+          error = next.error || error;
+        }
+      }
+      const item = { state };
+      if (error) item.error = error;
       return [item];
     },
     onChanged: {
@@ -139,6 +154,16 @@ res = await ask({
 });
 ok(res.done === 2 && res.failed.length === 1, "2 成 1 败，逐条如实计数");
 ok(res.failed[0].filename === "a/2.md", "失败的正是第 2 条");
+
+console.log("\n[8] 3s 后才 interrupted：超时点的终局校验必须抓到");
+plan.push({ searchSeq: ["in_progress", { state: "interrupted", error: "FILE_NO_SPACE" }] });
+const t8 = Date.now();
+const slow = await ask(md("标题/slow.md"));
+const dt8 = Date.now() - t8;
+ok(slow.failed.length === 1, "超时点查到 interrupted 时按失败报（改之前这里会报成功）");
+ok(slow.failed[0] && slow.failed[0].error === "FILE_NO_SPACE", "error 原样透传：" + (slow.failed[0] || {}).error);
+ok(slow.done === 0, "done 不计这条");
+ok(dt8 >= 3000 && dt8 < 6000, `等待仍有界、没被拖长（实际 ${dt8}ms）`);
 
 console.log(fails.length ? `\n✗ ${fails.length} 项未通过` : "\n✓ 全部通过");
 if (fails.length) process.exit(1);
