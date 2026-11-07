@@ -363,12 +363,16 @@
     /* 三、md 先发。视频抓字节要几秒，媒体又是批量发的，md 放在最后就会出现
      * 「视频已经下来了、MD 还没来」，看着像 md 丢了。正文是主体，先落它。
      * 媒体那一步再出错也不该影响已经落地的 md，所以单独 try。 */
-    await chrome.runtime.sendMessage({
+    const mdRes = await chrome.runtime.sendMessage({
       type: "downloadFiles",
       data: { files: [{ filename: layout.md, text: md, mime: "text/markdown" }] },
     });
+    /* md 自己没落盘时不能写进 md（它根本没落盘，注记等于自欺），只能回传给 UI。
+     * 判据与豆瓣/微博/少数派/下厨房一致：filename 精确比对，不看 failed 条数。 */
+    const mdSaved = !(mdRes && mdRes.failed && mdRes.failed.some((f) => f && f.filename === layout.md));
 
     /* 四、再发媒体。 */
+    const failedWrite = [];
     if (withMedia) {
       try {
         let done = 0;
@@ -379,7 +383,9 @@
             batch.push({ filename: layout.prefix + names[j], url: srcs[j] });
           }
           if (batch.length) {
-            await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
+            const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
+            /* md 已经先落地了，这批失败补不进正文，只能交给 UI 交代条数。 */
+            if (wrote && wrote.failed) failedWrite.push(...wrote.failed);
           }
           done += batch.length;
           if (onProgress) onProgress(done, total);
@@ -387,8 +393,11 @@
       } catch (e) {
         console.warn("小红虾 · 媒体下发中断（md 已落地）", e);
       }
+      /* md 已先落地，这批失败补不进正文（改 md 就得把它挪到媒体之后，得不偿失），
+       * 只留一条完整清单在控制台备查。 */
+      if (failedWrite.length) console.warn("小红虾 · 媒体落盘失败（md 已落地，正文引用可能指向缺失文件）", failedWrite);
     }
-    return { media: withMedia ? total : 0, md: layout.md };
+    return { media: withMedia ? total : 0, md: layout.md, mdSaved, failedWrite };
   }
 
   /* ---------- UI ---------- */
@@ -503,16 +512,27 @@
         for (const b of panel.querySelectorAll(".xhx-zdm-act")) b.disabled = true;
         const label = act.textContent;
         const withMedia = media;
+        /* 失败文案要停留久一点，900ms 眨眼就没；全成功仍是 900ms、文案逐字不变。 */
+        let hold = 900;
         try {
           act.textContent = withMedia ? "0/" + info.media.length : "保存中";
-          await deliver(
+          const result = await deliver(
             info,
             (done, total) => {
               act.textContent = done + "/" + total;
             },
             { mode, withMedia, withComments: act.dataset.comments === "1" }
           );
-          act.textContent = "已提交";
+          const failedCount = (result && result.failedWrite && result.failedWrite.length) || 0;
+          if (result && result.mdSaved === false) {
+            act.textContent = "md 未保存";
+            hold = 4000;
+          } else if (failedCount) {
+            act.textContent = "已提交（" + failedCount + " 个失败）";
+            hold = 4000;
+          } else {
+            act.textContent = "已提交";
+          }
         } catch (e) {
           act.textContent = "失败";
         } finally {
@@ -520,7 +540,7 @@
             for (const b of panel.querySelectorAll(".xhx-zdm-act")) b.disabled = false;
             act.textContent = label;
             setOpen(false);
-          }, 900);
+          }, hold);
         }
       });
     }
