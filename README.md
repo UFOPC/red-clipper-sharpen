@@ -37,11 +37,12 @@
 | 少数派 | `sspai.com` | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
 | 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
+| 微博 | `m.weibo.cn` | 单条图文 / 组图，取 `/large/` 原图 | 只接 `/status/<id>` 与 `/detail/<id>`；视频封面不算配图，不下视频 |
 
 > 表格、弹窗、`manifest.content_scripts.matches` 三处**顺序一致**。浏览器扩展详情页按 manifest 的
 > 顺序逐条列出 `*://*.<域名>/*`，扩展改不了那串文案，但可以保证顺序对得上，从上往下逐条能对上号。
-> 唯一多出来的一行是 `*://*.doubanio.com/*`（豆瓣图床的 host 权限），它排在 `content_scripts.matches`
-> 之后，是浏览器自动补的。
+> 末尾另有多出来两行 `*://*.doubanio.com/*` / `*://*.sinaimg.cn/*`（图床的 host 权限），
+> 是浏览器自动补在 `content_scripts.matches` 之后的。
 
 ## 安装
 
@@ -161,6 +162,9 @@ PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthrea
 
 # 豆瓣：额外断言「每张图都拿到真字节」（裸请求会 418，不能退回原地址）
 PW=… PW_EXE=… node test/e2e-real-douban.mjs https://movie.douban.com/review/17890635/
+
+# 微博：断言图片已升级成 /large/ 且拿到真字节（裸请求会 403）
+PW=… PW_EXE=… node test/e2e-real-weibo.mjs https://m.weibo.cn/status/5359048358626912
 ```
 
 `PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。
@@ -221,9 +225,10 @@ test/                  Playwright 端到端用例
 | `fetchMedia` | `{data:{url}}` | 后台代取图片字节（绕开 CORS），返回 `{ok, type, base64}` |
 | `clearData` / `cancel` | — | 清暂存 / 取消当前保存 |
 
-**防盗链分两种**：少数派是「内容脚本 fetch 就够」；`doubanio.com` 这类是「必须带 Referer，
-页面内 fetch 又被 CORS 挡住」，只能由静态 DNR 规则改请求头 + `fetchMedia` 后台代取，
-取回的字节内联成 `data:` URL 再交给下载器。规则在 `rules/douban-referer.json`。
+**防盗链分两种**：少数派是「内容脚本 fetch 就够」；`doubanio.com` / `sinaimg.cn` 这类是
+「必须带 Referer，页面内 fetch 又被 CORS 挡住」，只能由静态 DNR 规则改请求头 + `fetchMedia`
+后台代取，取回的字节内联成 `data:` URL 再交给下载器。两条规则分别在
+`rules/douban-referer.json`（418）与 `rules/weibo-referer.json`（403）。
 
 暂存走 IndexedDB 而不是内存：MV3 的 service worker 会被回收，内存变量活不过一次取消或一次空闲。
 

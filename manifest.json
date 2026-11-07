@@ -100,14 +100,29 @@
             "*://mp.weixin.qq.com/*"
          ],
          "run_at": "document_idle"
+      },
+      {
+         "matches": [
+            "*://m.weibo.cn/status/*",
+            "*://m.weibo.cn/detail/*"
+         ],
+         "css": [
+            "content/weibo.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/weibo.js"
+         ],
+         "run_at": "document_idle"
       }
    ],
-   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景 / 恩山 / 耳机大家坛帖子、豆瓣影评、少数派文章、什么值得买文章、微信公众号文章保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
+   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景 / 恩山 / 耳机大家坛帖子、豆瓣影评、少数派文章、什么值得买文章、微信公众号文章、单条微博保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
    "host_permissions": [
       "*://*.xiaohongshu.com/*",
       "*://cdnfile.sspai.com/*",
       "*://cdn-static.sspai.com/*",
-      "*://*.doubanio.com/*"
+      "*://*.doubanio.com/*",
+      "*://*.sinaimg.cn/*"
    ],
    "icons": {
       "16": "icons/icon16.png",
@@ -136,6 +151,8 @@
             "*://*.douban.com/*",
             "*://*.sspai.com/*",
             "*://post.smzdm.com/*",
+            "*://m.weibo.cn/status/*",
+            "*://m.weibo.cn/detail/*",
             "*://mp.weixin.qq.com/*"
          ],
          "resources": [
@@ -149,6 +166,11 @@
             "id": "douban-referer",
             "enabled": true,
             "path": "rules/douban-referer.json"
+         },
+         {
+            "id": "weibo-referer",
+            "enabled": true,
+            "path": "rules/weibo-referer.json"
          }
       ]
    }
