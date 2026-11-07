@@ -24,17 +24,21 @@
     }
   }
 
-  /* 落盘失败：小红书的胶囊没有独立状态位（index.css 里也没有 error 类），
-   * 所以直接把胶囊文字临时换成「失败 N」再还原——零新增节点、零新增 CSS 规则。
-   * 条数来自后台返回的 res.failed，取消不算失败。 */
-  function showWriteFailure(container, count) {
+  /* 小红书的胶囊没有独立状态位（index.css 里也没有 error 类），
+   * 所以直接把胶囊文字临时换掉再还原——零新增节点、零新增 CSS 规则。 */
+  function showBrandText(container, text) {
     const label = container.querySelector(".xhx-brand-text");
     if (!label) return;
     if (!label.dataset.label) label.dataset.label = label.textContent;
-    label.textContent = "失败 " + count;
+    label.textContent = text;
     setTimeout(() => {
       label.textContent = label.dataset.label;
     }, 4000);
+  }
+
+  /* 条数来自后台返回的 res.failed，取消不算失败。 */
+  function showWriteFailure(container, count) {
+    showBrandText(container, "失败 " + count);
   }
 
   function wait(ms = 600) {
@@ -97,6 +101,7 @@
     setTimeout(injectOnce, 300);
 
     let writeFailed = 0;
+    let writeError = false;
     try {
       if (withComment && !loggedOut) await expandAllComments();
       await ask({ type: "clearData" });
@@ -117,11 +122,19 @@
         if (res && res.failed && res.failed.length && !res.cancelled) writeFailed = res.failed.length;
       }
     } catch (error) {
-      // 取消和页面跳转都会中断链路；最终统一恢复按钮。
+      /* 抛错 ≠ 取消。取消是用户按的，cancelled 已置位，静默恢复按钮就行；
+       * 其余（扩展刚重载导致端口失效、后台回 error、页面结构变了）以前一律吞掉，
+       * 于是「什么都没存」和「存好了」在界面上一模一样：按钮转一圈又变回「剪藏」。
+       * 这里只认 cancelled，其余一定留话。 */
+      if (!cancelled) {
+        writeError = true;
+        console.warn("小红虾 · 保存中断", error);
+      }
     } finally {
       setDownloading(downloadId, false);
       // 放在按钮恢复显示之后再说，否则提示就写在隐藏状态里，用户看不见
       if (writeFailed) showWriteFailure(container, writeFailed);
+      else if (writeError) showBrandText(container, "失败");
     }
   }
 
