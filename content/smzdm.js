@@ -373,6 +373,10 @@
 
     /* 四、再发媒体。 */
     const failedWrite = [];
+    /* 端口断开（扩展重载、SW 崩溃）时 sendMessage 是 reject 而不是回 {failed}，
+     * 循环被打断、剩下的批次一张没发，failedWrite 却是空的——必须单独记一笔，
+     * 否则 UI 会显示「已提交」，用户以为 20/20 都发了。 */
+    let mediaError = "";
     if (withMedia) {
       try {
         let done = 0;
@@ -391,13 +395,14 @@
           if (onProgress) onProgress(done, total);
         }
       } catch (e) {
+        mediaError = "媒体下发中断（md 已落地）";
         console.warn("小红虾 · 媒体下发中断（md 已落地）", e);
       }
       /* md 已先落地，这批失败补不进正文（改 md 就得把它挪到媒体之后，得不偿失），
        * 只留一条完整清单在控制台备查。 */
       if (failedWrite.length) console.warn("小红虾 · 媒体落盘失败（md 已落地，正文引用可能指向缺失文件）", failedWrite);
     }
-    return { media: withMedia ? total : 0, md: layout.md, mdSaved, failedWrite };
+    return { media: withMedia ? total : 0, md: layout.md, mdSaved, failedWrite, mediaError };
   }
 
   /* ---------- UI ---------- */
@@ -526,6 +531,10 @@
           const failedCount = (result && result.failedWrite && result.failedWrite.length) || 0;
           if (result && result.mdSaved === false) {
             act.textContent = "md 未保存";
+            hold = 4000;
+          } else if (result && result.mediaError) {
+            /* 比「N 个未保存」重：整批没发出去，且失败的条数都数不出来。 */
+            act.textContent = "媒体下发中断";
             hold = 4000;
           } else if (failedCount) {
             act.textContent = failedCount + " 个媒体未保存";
