@@ -268,6 +268,8 @@
     const layout = RN.layout(info.title, info.nick, info.time);
     const total = info.images.length;
     const names = new Array(total);
+    const failedFetch = [];
+    const failedWrite = [];
     let done = 0;
     let mediaError = "";
 
@@ -282,19 +284,33 @@
         const src = pick === "small" ? smallUrl(origin) : origin;
         let url = src;
         let ext = extOf(origin);
+        /* 手动超时而不是 AbortSignal.timeout：manifest 没锁最低内核版本。 */
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 15000);
         try {
-          const res = await fetch(src, { credentials: "omit" });
+          const res = await fetch(src, { credentials: "omit", signal: ctrl.signal });
           if (!res.ok) throw new Error("HTTP " + res.status);
           const blob = await res.blob();
           url = await blobToDataUrl(blob);
           ext = extFromMime(blob.type) || ext;
         } catch (e) {
-          // 抓不到就退回原地址，让下载器自己再试一次
+          /* cdnfile 的裸地址回 403，写进 md 只会留下一条死链；
+           * 超时 15s 也走这条：该张不占 names[j]、不进 batch，末尾统一说明。
+           * 错误串原样带出去（timeout / HTTP 403 / 网络层 message），不做映射。 */
+          failedFetch.push({
+            no: j + 1,
+            error: ctrl.signal.aborted ? "timeout" : (e && e.message) || String(e),
+          });
+          continue;
+        } finally {
+          clearTimeout(timer);
         }
         names[j] = RN.mediaPath(layout.mediaStem, j + 1, ext);
         batch.push({ filename: layout.prefix + names[j], url });
       }
-      await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
+      const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: batch } });
+      /* 落盘失败与取字节失败分开记、分开写：处置方式不一样。 */
+      if (wrote && wrote.failed) failedWrite.push(...wrote.failed);
       done += batch.length;
       if (onProgress) onProgress(done, total);
     }
@@ -311,6 +327,12 @@
     });
     if (mediaError) {
       body += "\n\n> 图片下发中断（" + mediaError + "），正文照存，缺的图重存一次即可。";
+    }
+    if (failedFetch.length) {
+      body += "\n\n> " + RN.fetchFailNote(failedFetch) + "，未写入引用。";
+    }
+    if (failedWrite.length) {
+      body += "\n\n> 另有 " + failedWrite.length + " 个文件下载失败：" + RN.writeFailNote(failedWrite) + "。";
     }
     if (info.iframes) {
       body += `\n\n> 原文含 ${info.iframes} 个内嵌媒体（iframe），未下载。`;
@@ -332,11 +354,13 @@
       media: [],
     });
 
-    await chrome.runtime.sendMessage({
+    const mdRes = await chrome.runtime.sendMessage({
       type: "downloadFiles",
       data: { files: [{ filename: layout.md, text: md, mime: "text/markdown" }] },
     });
-    return { images: withMedia ? total : 0, md: layout.md };
+    /* md 自己没落盘时不能写进 md（它根本没落盘，注记等于自欺），只能回传给 UI。 */
+    const mdSaved = !(mdRes && mdRes.failed && mdRes.failed.some((f) => f && f.filename === layout.md));
+    return { images: withMedia ? total : 0, md: layout.md, mdSaved };
   }
 
   /* ---------- UI ---------- */
@@ -453,16 +477,23 @@
         for (const b of panel.querySelectorAll(".sspai-xhx-act")) b.disabled = true;
         const label = act.textContent;
         const withMedia = media;
+        /* md 未落盘时文案要停留久一点，900ms 眨眼就没；成功路径仍是 900ms，逐字不变。 */
+        let hold = 900;
         try {
           act.textContent = withMedia ? "0/" + info.images.length : "保存中";
-          await deliver(
+          const result = await deliver(
             info,
             (done, total) => {
               act.textContent = done + "/" + total;
             },
             { mode, withMedia, withComments: act.dataset.comments === "1" }
           );
-          act.textContent = "已提交";
+          if (result && result.mdSaved === false) {
+            act.textContent = "md 未保存";
+            hold = 4000;
+          } else {
+            act.textContent = "已提交";
+          }
         } catch (e) {
           act.textContent = "失败";
         } finally {
@@ -470,7 +501,7 @@
             for (const b of panel.querySelectorAll(".sspai-xhx-act")) b.disabled = false;
             act.textContent = label;
             setOpen(false);
-          }, 900);
+          }, hold);
         }
       });
     }

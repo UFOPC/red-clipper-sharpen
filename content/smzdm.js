@@ -271,17 +271,23 @@
   }
 
   async function grabVideo(url) {
+    /* 手动超时而不是 AbortSignal.timeout：manifest 没锁最低内核版本。
+     * 没有这一步时，一个半开连接会让「保存中」永久停住，按钮也永久 disabled。 */
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
       /* omit 而不是 include：签名地址不靠 cookie，而带凭据的跨域请求要求 CDN 回具体源，
        * 很多视频域名只给 *，那样反而被 CORS 挡掉。Referer 无论哪种模式都会带。 */
-      const res = await fetch(url, { credentials: "omit" });
+      const res = await fetch(url, { credentials: "omit", signal: ctrl.signal });
       if (!res.ok) return { error: "HTTP " + res.status };
       const blob = await res.blob();
       if (!blob.size) return { error: "空响应" };
       if (blob.size > VIDEO_MAX) return { error: "体积 " + Math.round(blob.size / 1048576) + "MB 过大" };
       return { url: await blobToDataUrl(blob) };
     } catch (e) {
-      return { error: "跨域被拒" };
+      return { error: e && e.name === "AbortError" ? "超时 15s" : "跨域被拒" };
+    } finally {
+      clearTimeout(timer);
     }
   }
 

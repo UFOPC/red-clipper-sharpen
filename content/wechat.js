@@ -210,7 +210,16 @@
     if (!body) throw new Error("找不到正文容器 #js_content");
 
     const url = location.href.split("#")[0];
-    const aid = hash8(location.pathname + location.search);
+    /* 只让稳定标识参与 hash：整串 query 里 scene / subscene / chksm 每次访问都可能变，
+     * 全量喂进 hash8 会让同一篇文章在不同入口下得到两套 assets 文件名，
+     * README 承诺的「同一篇文章多次剪藏得到同一个名字」就不成立了。
+     * 四个参数一个都没有时退回路径：短码 /s/<code> 自身稳定，裸 /s 才回头看 query。 */
+    const q = new URLSearchParams(location.search);
+    const stable = ["__biz", "mid", "idx", "sn"]
+      .map((k) => q.get(k) || "")
+      .filter(Boolean)
+      .join("&");
+    const aid = hash8(stable || (location.pathname.length > 2 ? location.pathname : location.pathname + location.search));
     const date = pubDate(published);
     const timeMs = date ? date.getTime() : Date.now();
     /* native = 小红虾原生结构（<标题>/ + images/ + 中文 frontmatter），发布版默认；
@@ -221,6 +230,7 @@
 
     const media = [];
     const byUrl = new Map();
+    let truncatedImages = false;
 
     const onImage = options.media
       ? (src, index) => {
@@ -228,7 +238,10 @@
           const cached = byUrl.get(src);
           return native ? `![${media.find((m) => m.url === src).no}](${RN.rel(cached)})` : `![图片](${cached})`;
         }
-        if (media.length >= MAX_IMAGES) return "";
+        if (media.length >= MAX_IMAGES) {
+          truncatedImages = true;
+          return "";
+        }
         const ext = extOf(src);
         const no = media.length + 1;
         const relPath = native
@@ -269,6 +282,8 @@
     const parts = [front, ""];
     if (native) parts.push(`# ${title}`, "");
     parts.push(markdown, "");
+    /* 超上限被丢掉的那批图必须在产物里说一声，否则 md 看起来完整、实际少一截。 */
+    if (truncatedImages) parts.push(`> 已截断：仅保留前 ${MAX_IMAGES} 张图。`, "");
 
     files.push({
       filename: native ? layout.md : `${dir}${safeName(title)}.md`,
@@ -404,11 +419,16 @@
       status.textContent = "正在整理…";
       try {
         const result = build({ media: prefs.media });
-        await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: result.files } });
+        const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: result.files } });
+        /* 单条落盘失败不会抛错（响应里没有 error 字段），只能从返回值里读。
+         * md 已在同一条消息里，失败时正文写不回去，只能在这里说实话；
+         * 全成功时文案保持原样，不要出现「（0 个失败）」。 */
+        const failedCount = (wrote && wrote.failed && wrote.failed.length) || 0;
         const what = [];
         if (result.mediaCount) what.push(`${result.mediaCount} 张图片`);
         what.push(`${result.chars} 字正文`);
-        status.textContent = `已提交 ${what.join(" + ")} → ${result.dir}`;
+        status.textContent = `已提交 ${what.join(" + ")} → ${result.dir}` +
+          (failedCount ? `（${failedCount} 个失败）` : "");
       } catch (error) {
         status.textContent = "保存失败：" + (error?.message || error);
       } finally {
@@ -424,12 +444,14 @@
     panel.querySelector(".xhx-dz-go").addEventListener("click", run);
 
     /* 公众号页头是 #js_top_profile（桌面端还压着一条 .rich_media_tool），
-     * 胶囊放在正文区左上角外侧，避开标题与「听全文」。 */
+     * 胶囊放在正文区左上角外侧，避开标题与「听全文」。
+     * 容器是 position: fixed（discuz.css），只能用视口坐标——早先加 window.scrollY
+     * 换算成文档坐标，带锚点进入或刷新恢复滚动位时按钮会被推到视口下方。 */
     const placeDock = () => {
       const anchor = document.querySelector(".rich_media_area_primary") || document.querySelector("#js_article");
       let top = 24;
-      if (anchor) top = anchor.getBoundingClientRect().top + window.scrollY + 8;
-      dock.style.top = Math.max(12, Math.round(top)) + "px";
+      if (anchor) top = anchor.getBoundingClientRect().top + 8;
+      dock.style.top = Math.max(12, Math.min(Math.round(top), window.innerHeight - 80)) + "px";
     };
 
     dock.append(button, panel, status);

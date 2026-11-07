@@ -24,6 +24,19 @@
     }
   }
 
+  /* 落盘失败：小红书的胶囊没有独立状态位（index.css 里也没有 error 类），
+   * 所以直接把胶囊文字临时换成「失败 N」再还原——零新增节点、零新增 CSS 规则。
+   * 条数来自后台返回的 res.failed，取消不算失败。 */
+  function showWriteFailure(container, count) {
+    const label = container.querySelector(".xhx-brand-text");
+    if (!label) return;
+    if (!label.dataset.label) label.dataset.label = label.textContent;
+    label.textContent = "失败 " + count;
+    setTimeout(() => {
+      label.textContent = label.dataset.label;
+    }, 4000);
+  }
+
   function wait(ms = 600) {
     return new Promise((resolve, reject) => {
       setTimeout(() => cancelled ? reject(new Error("cancel by user")) : resolve(), ms);
@@ -83,6 +96,7 @@
     setDownloading(downloadId, true);
     setTimeout(injectOnce, 300);
 
+    let writeFailed = 0;
     try {
       if (withComment && !loggedOut) await expandAllComments();
       await ask({ type: "clearData" });
@@ -95,11 +109,19 @@
         videoUrl: container.dataset.videoUrl || "",
         skipMedia: container.dataset.media === "0",
       });
-      if (!cancelled) await ask({ type: "download", downloadId });
+      if (!cancelled) {
+        /* 后台返回 { done, failed, cancelled }；单条落盘失败**不会**让 ask() 抛错
+         * （响应里没有 error 字段），必须自己看 failed。
+         * 取消保持静默恢复，不当错误弹。 */
+        const res = await ask({ type: "download", downloadId });
+        if (res && res.failed && res.failed.length && !res.cancelled) writeFailed = res.failed.length;
+      }
     } catch (error) {
       // 取消和页面跳转都会中断链路；最终统一恢复按钮。
     } finally {
       setDownloading(downloadId, false);
+      // 放在按钮恢复显示之后再说，否则提示就写在隐藏状态里，用户看不见
+      if (writeFailed) showWriteFailure(container, writeFailed);
     }
   }
 
@@ -330,7 +352,9 @@
     const noteContainer = document.querySelector(".note-container");
     if (!noteId || !noteContainer) return;
     const mount = noteContainer.querySelector(".interaction-container .author-wrapper");
-    if (!mount || noteContainer.innerHTML.includes("xhx-download-" + noteId)) return;
+    /* 用 querySelector 而不是 innerHTML.includes：后者每 300ms 对整棵笔记 DOM
+     * （含已展开的全部评论）做一次字符串序列化，评论多的笔记等于常驻十几个点的 CPU。 */
+    if (!mount || noteContainer.querySelector('.xhx-download[data-id="' + noteId + '"]')) return;
 
     const container = document.createElement("div");
     container.className = "xhx-download xhx-download-container xhx-download-btn xhx-download-" + noteId;

@@ -126,6 +126,8 @@
     const layout = RN.layout(info.title, info.nick, info.time);
     const total = info.images.length;
     const names = new Array(total);
+    const failedWrite = [];
+    let mediaError = "";
 
     if (withMedia && total) {
       const files = info.images.map((url, i) => {
@@ -133,14 +135,28 @@
         names[i] = name;
         return { filename: layout.prefix + name, url };
       });
-      await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files } });
-      if (onProgress) onProgress(total, total);
+      /* 媒体这一跳失败不能把 md 一起带走：老版本这里是裸 await，
+       * 结果是一堆孤儿图片 + 一个字都没落盘的 md，用户只能整篇重存。 */
+      try {
+        const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files } });
+        /* 单条落盘失败不会抛错（响应里没有 error 字段），必须显式收。 */
+        if (wrote && wrote.failed) failedWrite.push(...wrote.failed);
+        if (onProgress) onProgress(total, total);
+      } catch (e) {
+        mediaError = (e && e.message) || String(e);
+      }
     }
 
-    const body = info.body.replace(/\u0000(\d+)\u0000/g, (_, n) => {
+    let body = info.body.replace(/\u0000(\d+)\u0000/g, (_, n) => {
       const name = names[Number(n)];
       return name ? `![${Number(n) + 1}](${RN.rel(name)})` : "";
     });
+    if (mediaError) {
+      body += "\n\n> 图片下发中断（" + mediaError + "），正文照存，缺的图重存一次即可。";
+    }
+    if (failedWrite.length) {
+      body += "\n\n> 另有 " + failedWrite.length + " 个文件下载失败：" + RN.writeFailNote(failedWrite) + "。";
+    }
 
     const md = RN.markdown({
       source: "下厨房",
@@ -156,11 +172,13 @@
       media: [],
     });
 
-    await chrome.runtime.sendMessage({
+    const mdRes = await chrome.runtime.sendMessage({
       type: "downloadFiles",
       data: { files: [{ filename: layout.md, text: md, mime: "text/markdown" }] },
     });
-    return { images: withMedia ? total : 0, md: layout.md };
+    /* md 自己没落盘时不能写进 md（它根本没落盘，注记等于自欺），只能回传给 UI。 */
+    const mdSaved = !(mdRes && mdRes.failed && mdRes.failed.some((f) => f && f.filename === layout.md));
+    return { images: withMedia ? total : 0, md: layout.md, mdSaved };
   }
 
   /* ---------- UI ---------- */
@@ -251,12 +269,19 @@
       act.disabled = true;
       const label = act.textContent;
       const withMedia = media;
+      /* md 未落盘时文案要停留久一点，900ms 眨眼就没；成功路径仍是 900ms，逐字不变。 */
+      let hold = 900;
       try {
         act.textContent = withMedia ? "0/" + info.images.length : "保存中";
-        await deliver(info, (d, t) => {
+        const result = await deliver(info, (d, t) => {
           act.textContent = d + "/" + t;
         }, { withMedia });
-        act.textContent = "已提交";
+        if (result && result.mdSaved === false) {
+          act.textContent = "md 未保存";
+          hold = 4000;
+        } else {
+          act.textContent = "已提交";
+        }
       } catch (e) {
         act.textContent = "失败";
       } finally {
@@ -264,7 +289,7 @@
           act.disabled = false;
           act.textContent = label;
           setOpen(false);
-        }, 900);
+        }, hold);
       }
     });
 

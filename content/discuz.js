@@ -290,14 +290,17 @@
     return { author, time };
   }
 
-  function maxPage(root) {
+  /* 未截断的总页数；MAX_PAGES 的钳制交给调用方，好让"被截断"这件事能被写进 md。 */
+  function maxPageRaw(root) {
     let max = 1;
     for (const link of root.querySelectorAll(".pg a")) {
       const page = Number(new URL(link.href, location.href).searchParams.get("page") || link.textContent.trim());
       if (Number.isInteger(page) && page > max) max = page;
     }
-    return Math.min(max, MAX_PAGES);
+    return max;
   }
+
+  const maxPage = (root) => Math.min(maxPageRaw(root), MAX_PAGES);
 
   const pageUrl = (page) => SITE.pageUrl({ tid, page, authorId });
 
@@ -341,7 +344,11 @@
       const response = await fetch(pageUrl(page), { credentials: "include" });
       if (!response.ok) return null;
       const doc = new DOMParser().parseFromString(await response.text(), "text/html");
-      return { doc, data: collect(doc, options) };
+      const data = collect(doc, options);
+      /* 风控验证页、登录墙、"帖子不存在"页返回的都是 200，但一楼层都解析不出来。
+       * 这种空页必须算失败：否则跨页抓取会静默少页，状态栏还报「已提交」。 */
+      if (!data.articlePosts.length && !data.comments.length) return null;
+      return { doc, data };
     } catch (e) {
       return null;
     }
@@ -349,6 +356,8 @@
 
   async function collectAll(options = prefs) {
     const current = collect(document, options);
+    const failedPages = [];
+    const truncated = [];
     let base = current;
     let root = document;
     let baseIsCurrent = true;
@@ -359,23 +368,36 @@
         base = first.data;
         root = first.doc;
         baseIsCurrent = false;
+      } else {
+        // 回第 1 页取元信息失败：目录名/作者/时间会退化成当前页口径，也必须留痕
+        failedPages.push(1);
       }
     }
-    if (!authorId) {
-      base.comments = base.comments.slice(0, MAX_COMMENTS);
-      return base;
-    }
 
-    const pages = maxPage(root);
+    const finish = () => {
+      if (base.comments.length > MAX_COMMENTS) {
+        truncated.push(`仅保留前 ${MAX_COMMENTS} 条回复（共 ${base.comments.length} 条）`);
+        base.comments = base.comments.slice(0, MAX_COMMENTS);
+      }
+      return { ...base, failedPages, truncated };
+    };
+
+    if (!authorId) return finish();
+
+    const rawPages = maxPageRaw(root);
+    const pages = Math.min(rawPages, MAX_PAGES);
+    if (rawPages > MAX_PAGES) truncated.push(`仅保留前 ${MAX_PAGES} 页（帖子共 ${rawPages} 页）`);
     for (let page = 2; page <= pages; page++) {
       if (baseIsCurrent && page === ctx.page) continue;
       const next = await fetchCollect(page, options);
-      if (!next) continue;
+      if (!next) {
+        failedPages.push(page);
+        continue;
+      }
       base.articlePosts.push(...next.data.articlePosts);
       base.comments.push(...next.data.comments);
     }
-    base.comments = base.comments.slice(0, MAX_COMMENTS);
-    return base;
+    return finish();
   }
 
   function commentsMarkdown(comments) {
@@ -411,7 +433,7 @@
   }
 
   async function build(options = prefs) {
-    const { articlePosts, comments, meta } = await collectAll(options);
+    const { articlePosts, comments, meta, failedPages = [], truncated = [] } = await collectAll(options);
     const layout = RN.layout(meta.title, meta.author, meta.timeMs);
     const media = [];
     const byUrl = new Map();
@@ -449,6 +471,13 @@
     if (body) parts.push(body, "");
     const commentsText = options.comments ? commentsMarkdown(comments) : "";
     if (commentsText) parts.push(commentsText, "");
+    /* 缺页与被截断都写在正文末尾：产物看起来完整、实际少一截是最难查的一类问题。 */
+    if (failedPages.length) {
+      parts.push(`> 第 ${failedPages.join("、")} 页抓取失败（可能触发站点风控），该页内容缺失。`, "");
+    }
+    if (truncated.length) {
+      parts.push(`> 已截断：${truncated.join("；")}。`, "");
+    }
 
     const markdown = parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
     files.push({ filename: layout.md, text: markdown, mime: "text/markdown" });
@@ -607,12 +636,17 @@
       try {
         const result = await build({ media: prefs.media, comments: withComments });
         if (!result.files.length) throw new Error("没有找到可下载的内容");
-        await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: result.files } });
+        const wrote = await chrome.runtime.sendMessage({ type: "downloadFiles", data: { files: result.files } });
+        /* 单条落盘失败不会抛错（响应里没有 error 字段），只能从返回值里读。
+         * md 与媒体在同一条消息里，失败时 md 已经写下去了，改不了正文，
+         * 所以只能在这里说实话：全成功时文案保持原样，别出现「（0 个失败）」。 */
+        const failedCount = (wrote && wrote.failed && wrote.failed.length) || 0;
         const what = [];
         if (result.mediaCount) what.push(`${result.mediaCount} 张图片`);
         what.push("Markdown");
         status.textContent = `已提交 ${what.join(" + ")}` +
-          (result.commentCount ? `，${result.commentCount} 条回复` : "");
+          (result.commentCount ? `，${result.commentCount} 条回复` : "") +
+          (failedCount ? `（${failedCount} 个失败）` : "");
       } catch (error) {
         status.textContent = "保存失败：" + (error?.message || error);
       } finally {
@@ -630,16 +664,18 @@
 
     /* 站方页头（#hd）和「返回列表」都占着右上角。
      * 面包屑条 #pt 的右半截是空的，把胶囊放进去正好落在内容区右上角，
-     * 既压不到登录框，也压不到「返回列表」。坐标用文档坐标，
-     * 避免「刷新时页面已滚动」把按钮顶到错误位置。 */
+     * 既压不到登录框，也压不到「返回列表」。
+     * 容器是 position: fixed（discuz.css），所以这里只能用**视口坐标**：
+     * 早先加 window.scrollY 换算成文档坐标，结果带锚点进入或刷新恢复滚动位时，
+     * 按钮被推到视口下方 scrollY 像素处——那正是修掉的那个 bug。 */
     const placeDock = () => {
-      const docTop = (el) => el.getBoundingClientRect().top + window.scrollY;
+      const viewTop = (el) => el.getBoundingClientRect().top;
       const pt = document.querySelector("#pt");
       const hd = document.querySelector("#hd");
       let top = 24;
-      if (pt) top = docTop(pt) + 2;
-      else if (hd) top = docTop(hd) + hd.offsetHeight + 12;
-      dock.style.top = Math.max(12, Math.round(top)) + "px";
+      if (pt) top = viewTop(pt) + 2;
+      else if (hd) top = viewTop(hd) + hd.offsetHeight + 12;
+      dock.style.top = Math.max(12, Math.min(Math.round(top), window.innerHeight - 80)) + "px";
     };
 
     dock.append(button, panel, status);
