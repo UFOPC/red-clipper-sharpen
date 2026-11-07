@@ -108,6 +108,31 @@ function validatePackage() {
     if (!fs.existsSync(path.join(ROOT, file))) throw new Error(`缺少文件: ${file}`);
   }
 
+  /* content_scripts 覆盖的每个 host 都必须落在某个 WAR matches 里。
+   * 内容脚本往页面塞的是 chrome-extension://…/icons/icon.svg，这个资源只对 WAR matches 里的站点开放；
+   * 加站时只改 content_scripts.matches、漏了 WAR，胶囊上就没有图标（裂图），
+   * 功能全正常、e2e 也断言不到，所以在这里挡。 */
+  const hostOf = (pattern) => {
+    const match = /^(?:\*|https?):\/\/([^/]+)\//.exec(pattern);
+    return match ? match[1].toLowerCase() : "";
+  };
+  const warHosts = (manifest.web_accessible_resources || [])
+    .flatMap((war) => (war.matches || []).map(hostOf))
+    .filter(Boolean);
+  const covered = (host) =>
+    warHosts.some((item) => item === host || (item.startsWith("*.") && host.endsWith(item.slice(1))));
+  for (const cs of manifest.content_scripts || []) {
+    for (const pattern of cs.matches || []) {
+      const host = hostOf(pattern);
+      if (!host) throw new Error(`content_scripts.matches 无法解析出域名: ${pattern}`);
+      if (!covered(host))
+        throw new Error(
+          `content_scripts 覆盖了 ${host}，但没有任何 web_accessible_resources.matches 覆盖它\n` +
+          `内容脚本要加载 icons/icon.svg，漏配会让胶囊图标裂图。`
+        );
+    }
+  }
+
   const ids = new Set();
   for (const rr of RULE_RESOURCES) {
     const rules = JSON.parse(fs.readFileSync(path.join(ROOT, rr.path), "utf8"));

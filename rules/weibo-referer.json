@@ -10,7 +10,7 @@
     },
     "condition": {
       "urlFilter": "||sinaimg.cn",
-      "resourceTypes": ["xmlhttprequest", "image", "other", "media", "main_frame", "sub_frame"]
+      "resourceTypes": ["xmlhttprequest"]
     }
   }
 ]

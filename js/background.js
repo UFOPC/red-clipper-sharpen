@@ -2,7 +2,21 @@ import "./rn-format.js";
 
 const DB_NAME = "keyval-store";
 const STORE_NAME = "keyval";
-let cancelled = true;
+
+/* 取消状态按任务（downloadId）分条，不再是一个模块级布尔：
+ * 两个标签页同时保存时，一个收尾会把全局标志置回，正在跑的另一个被误判成「已取消」；
+ * 而且 SW 随时被回收，模块变量清零，那个布尔的语义本来也不成立。
+ * 只登记显式取消：没登记过的 id 一律当作「没取消」——
+ * download 是 saveData 之后的独立消息，那时 saveData 的任务已注销，
+ * 若把「查不到 = 已取消」，每一次保存都会在下载阶段静默变成 0 个文件。 */
+const tasks = new Map();
+const startTask = (id) => {
+  if (id) tasks.set(id, { cancelled: false });
+};
+const endTask = (id) => {
+  if (id) tasks.delete(id);
+};
+const isCancelled = (id) => !!(id && tasks.has(id) && tasks.get(id).cancelled);
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -47,27 +61,104 @@ async function useStore(mode, operation) {
 
 const putFiles = (key, files) => useStore("readwrite", (store) => store.put({ files }, key));
 const getFiles = (key) => useStore("readonly", (store) => store.get(key));
-const clearFiles = () => useStore("readwrite", (store) => store.clear());
+/* 带 key 只删该任务的清单；不带 key 才整库清（content/index.js 发 clearData 时不带 id）。 */
+const clearFiles = (key) => useStore("readwrite", (store) => (key ? store.delete(key) : store.clear()));
 
+/* 文本文件走 base64 data URL。
+ * 之前是 percent-encoding：中文一个字 3 字节 → 9 个字符，带 300 条评论的 md
+ * 能撑到 MB 级 URL，而失败又只会落在下载器那边，正好丢掉最重要的 .md。 */
 function dataUrl(file) {
-  return "data:" + (file.mime || "text/plain") + ";charset=utf-8," + encodeURIComponent(file.text || "");
+  const bytes = new TextEncoder().encode(String(file.text || ""));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return "data:" + (file.mime || "text/plain") + ";base64," + btoa(binary);
 }
 
+/* 只有小文件（md / comments.json）等「确知写完了」再报成功：
+ * chrome.downloads.download() 的 promise 在「下载条目建出来」时就 resolve，
+ * 磁盘满、路径超长、权限不足这类失败会在之后异步变成 interrupted，光等 promise 看不见。
+ * 视频/大图不等——那会把 SW 吊在一次长下载上，得不偿失。 */
+const SETTLE_MIME = /^(?:text\/markdown|application\/json)\b/i;
+const SETTLE_TIMEOUT = 3000;
+
+function settleDownload(id, timeoutMs = SETTLE_TIMEOUT) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      chrome.downloads.onChanged.removeListener(onChanged);
+      resolve(result);
+    };
+    const onChanged = (delta) => {
+      if (!delta || delta.id !== id || !delta.state) return;
+      if (delta.state.current === "complete") finish({ ok: true });
+      else if (delta.state.current === "interrupted") {
+        finish({ ok: false, error: (delta.error && delta.error.current) || "interrupted" });
+      }
+    };
+    /* 超时按成功算：宁可漏报，也不要把杀软扫尾这类慢收尾误报成失败。 */
+    timer = setTimeout(() => finish({ ok: true }), timeoutMs);
+    chrome.downloads.onChanged.addListener(onChanged);
+    /* data: URL 可能极快收尾，事件早于监听落地，补一次查询兜住这个竞态。 */
+    Promise.resolve()
+      .then(() => chrome.downloads.search({ id }))
+      .then((items) => {
+        const item = items && items[0];
+        if (!item) return;
+        if (item.state === "complete") finish({ ok: true });
+        else if (item.state === "interrupted") finish({ ok: false, error: item.error || "interrupted" });
+      })
+      .catch(() => {});
+  });
+}
+
+/* 相对路径长度闸门（不含下载根目录）：与下面 onChanged 的等待互补，不是替代——
+ * onChanged 有 3s 上限，interrupted 晚于它就漏；这里是确定性的同步失败，快且不看时序。
+ * 180 这个数：加 C:\Users\<name>\Downloads\ 约 40 字符仍在 220 以内，离 Windows 260 有富余。
+ * 对 md 与媒体都生效——媒体名同样走 layout.mediaStem，长标题一样会撞。
+ * 注：当前 rn-format 已把标题/作者截到 60/24 码点，生成名最长约 160，这层是兜底。 */
+const MAX_RELATIVE_PATH = 180;
+
+/* 单个媒体失效不阻断同篇笔记的正文与其余文件，但失败必须一路回传给调用方：
+ * 以前这里只 console.warn 一句，UI 照样报「已保存」，
+ * 结果是最该看到的东西（md 里的图链）指向一批并不存在的文件。 */
 async function downloadOne(file) {
+  const filename = String(file.filename || "");
+  if (filename.length > MAX_RELATIVE_PATH) {
+    return { ok: false, filename, error: "filename too long (" + filename.length + ")" };
+  }
+  let id;
   try {
-    await chrome.downloads.download({
-      filename: file.filename,
+    id = await chrome.downloads.download({
+      filename,
       url: file.url || dataUrl(file),
       conflictAction: "overwrite",
     });
   } catch (error) {
-    // 单个媒体失效不应阻断同篇笔记的正文和其余文件。
-    console.warn("下载失败", file.filename, error);
+    return { ok: false, filename, error: String((error && error.message) || error) };
   }
+  if (!SETTLE_MIME.test(file.mime || "")) return { ok: true };
+  const settled = await settleDownload(id);
+  return settled.ok ? { ok: true } : { ok: false, filename, error: settled.error };
 }
 
-async function downloadList(files) {
-  for (const file of files || []) await downloadOne(file);
+/* 返回 {done, failed:[{filename,error}], cancelled}。
+ * 带 taskId 时每一轮都问一次是否已取消——用户点「取消」不该继续往下写盘。 */
+async function downloadList(files, taskId) {
+  let done = 0;
+  const failed = [];
+  for (const file of files || []) {
+    if (taskId && isCancelled(taskId)) return { done, failed, cancelled: true };
+    const result = await downloadOne(file);
+    if (result.ok) done++;
+    else failed.push({ filename: result.filename, error: result.error });
+  }
+  return { done, failed, cancelled: false };
 }
 
 function extractRawNote(noteId) {
@@ -361,7 +452,7 @@ function appendComments(body, note, files, filePaths, layout) {
 }
 
 async function assembleAndStore(downloadId, note, options) {
-  if (cancelled || !options.rnOnly) return;
+  if (!options.rnOnly || isCancelled(downloadId)) return;
   const RN = globalThis.__RN;
   const rawTitle = note.rawTitle || "";
   const nick = (note.user && note.user.username) || "";
@@ -410,7 +501,7 @@ async function assembleAndStore(downloadId, note, options) {
   }
 
   // 用户可能在 MAIN 世界取数或组装期间取消，取消后绝不留下可下载清单。
-  if (cancelled) return;
+  if (isCancelled(downloadId)) return;
   const markdown = RN.frontmatter({
     title: rawTitle,
     nick,
@@ -426,7 +517,7 @@ async function assembleAndStore(downloadId, note, options) {
 
 async function saveData(tab, downloadId, options) {
   const raw = await runInPage(tab, extractNoteData, downloadId, options);
-  if (cancelled || !raw) return;
+  if (!raw || isCancelled(downloadId)) return;
   const note = {
     rawTitle: raw.noteTitle || "",
     createDate: raw.noteCreateDate,
@@ -455,59 +546,98 @@ async function saveData(tab, downloadId, options) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     switch (message.type) {
-      case "cancel":
-        cancelled = true;
+      case "cancel": {
+        /* content/index.js 发 cancel 时不带 downloadId，必须保留「全部任务取消」的语义；
+         * 带 id 时只取消那一条，两个标签页互不牵连。 */
+        const id = message.data && message.data.downloadId;
+        if (id) {
+          const task = tasks.get(id);
+          if (task) task.cancelled = true;
+        } else {
+          tasks.forEach((task) => {
+            task.cancelled = true;
+          });
+        }
         return undefined;
+      }
       case "getNote":
         return runInPage(sender.tab, extractRawNote, message.downloadId);
       case "saveData":
-        cancelled = false;
+        startTask(message.downloadId);
         try {
           await saveData(sender.tab, message.downloadId, message);
         } finally {
-          cancelled = true;
+          endTask(message.downloadId);
         }
         return undefined;
       case "download": {
-        const data = await getFiles(message.downloadId + ":rn");
-        await downloadList(data && data.files);
-        return undefined;
+        /* download 是 saveData 之后的独立消息，这里重新登记任务，
+         * 用户在这期间点取消才能被 downloadList 感知到。 */
+        startTask(message.downloadId);
+        try {
+          const data = await getFiles(message.downloadId + ":rn");
+          return await downloadList(data && data.files, message.downloadId);
+        } finally {
+          endTask(message.downloadId);
+        }
       }
+      /* downloadFiles / downloadUrl 不带 taskId，因此返回里的 cancelled 恒为 false：
+       * 这两条消息来自没有取消入口的页面（豆瓣/微博/少数派/下厨房/值得买/Discuz/公众号），
+       * 消息里也没有 downloadId 可以挂任务，硬接只会造出一个永远不成立的钩子。
+       * 若将来某页要加取消：调用时在 message.data 里带上 downloadId，
+       * 这里换成 startTask(downloadId) / downloadList(files, downloadId) / finally endTask 即可。 */
       case "downloadFiles": {
         const files = message.data && message.data.files || [];
-        await downloadList(files);
-        return files.length;
+        return downloadList(files);
       }
       case "downloadUrl": {
         const data = message.data || {};
-        await downloadOne({ filename: data.filename, url: data.url });
+        const files = [{ filename: data.filename, url: data.url }];
         if (data.md && data.mdFilename) {
-          await downloadOne({ filename: data.mdFilename, text: data.md, mime: "text/markdown" });
+          files.push({ filename: data.mdFilename, text: data.md, mime: "text/markdown" });
         }
-        return undefined;
+        return downloadList(files);
       }
       case "fetchMedia": {
         /* 图床只认页面 Referer 时，内容脚本的 fetch 既被 CORS 拦、带不了来源，
-         * 而这里（带 host 权限 + rules/media-referer.json 补 Referer）能拿到 200。
-         * 取回字节再交给内容脚本拼 data: URL，绕开跨域读取限制。 */
+         * 而这里（带 host 权限 + rules/douban-referer.json / rules/weibo-referer.json
+         * 补 Referer）能拿到 200。取回字节再交给内容脚本拼 data: URL，绕开跨域读取限制。
+         *
+         * error 串是对 content/ 的公开契约，会原样写进 md 尾注与状态栏，改动前先通知对侧：
+         *   missing url / unsupported scheme / HTTP <status> / not image: <content-type> /
+         *   too large / timeout / <底层异常 message>
+         * 一律短、英文、可直接展示；要中文化请在 content 侧映射，别改这里的字面量。 */
         const url = message.data && message.data.url;
         if (!url) return { ok: false, error: "missing url" };
-        const response = await fetch(url);
-        if (!response.ok) return { ok: false, error: "HTTP " + response.status };
-        const buffer = await response.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i += 0x8000) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        if (!/^https?:/i.test(url)) return { ok: false, error: "unsupported scheme" };
+        const MAX_BYTES = 15 * 1024 * 1024;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) return { ok: false, error: "HTTP " + response.status };
+          /* 图床 200 也可能回一张 HTML 错误页/验证页，类型不对就不往下走，
+           * 否则 base64 出来的是网页，存成 .png 一张都打不开。 */
+          const type = response.headers.get("content-type") || "";
+          if (!/^image\//i.test(type)) return { ok: false, error: "not image: " + (type || "(none)") };
+          if (Number(response.headers.get("content-length")) > MAX_BYTES) return { ok: false, error: "too large" };
+          const buffer = await response.arrayBuffer();
+          if (buffer.byteLength > MAX_BYTES) return { ok: false, error: "too large" };
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 0x8000) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          }
+          return { ok: true, type, base64: btoa(binary) };
+        } catch (error) {
+          if (error && error.name === "AbortError") return { ok: false, error: "timeout" };
+          return { ok: false, error: String((error && error.message) || error) };
+        } finally {
+          clearTimeout(timer);
         }
-        return {
-          ok: true,
-          type: response.headers.get("content-type") || "image/png",
-          base64: btoa(binary),
-        };
       }
       case "clearData":
-        await clearFiles();
+        await clearFiles(message.downloadId ? message.downloadId + ":rn" : null);
         return undefined;
       default:
         return false;
@@ -516,7 +646,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-/* 图床放行规则走静态声明（manifest 的 declarative_net_request → rules/media-referer.json），
- * 不在这里动态注册：静态规则在扩展加载时就生效，不依赖 service worker 被唤醒。
+/* 图床放行规则走静态声明（manifest 的 declarative_net_request → rules/douban-referer.json、
+ * rules/weibo-referer.json），不在这里动态注册：静态规则在扩展加载时就生效，不依赖 service worker 被唤醒。
  * 只补 Referer 请求头，不试图改响应头绕 CORS —— 实测改响应头对页面内 fetch 的 CORS 检查无效，
  * 但补 Referer 后后台 fetch 能直接 200，所以字节统一由 background 代取。 */
