@@ -20,7 +20,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(ROOT, "dist");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"));
 /* 对外版本（0.X.X）由用户确认，脚本绝不改它，也不在它后面加东西。
- * 内部流水号只做本地记账，用来回答「现在手上这个包是 0.8.0 的第几次构建」：
+ * 内部流水号只做本地记账，用来回答「现在手上这个包是当前对外版本的第几次构建」：
  *   1. 存 .build-serial，每次打包 +1；
  *   2. 汇总写 dist/BUILD-INFO.txt（在 dist 根，不在包里，随 dist 一起被 gitignore）。
  * 包内 manifest.version、zip 文件名、设置页显示的版本号统一都是三段。 */
