@@ -102,13 +102,28 @@ function settleDownload(id, timeoutMs = SETTLE_TIMEOUT) {
       }
     };
     /* 超时按成功算：宁可漏报，也不要把杀软扫尾这类慢收尾误报成失败。
-     * 已知边界（下一轮补）：超时这一刻没有终局校验——下面那次 search 兜的是「事件早于监听
-     * 落地」的竞态，不是「3s 之后才 interrupted」。所以 A2 按钮的「已提交」只能读作
-     * 「本次没抓到失败证据」，不等于确认落盘；极慢收尾的 md/评论 json 失败会显示成已提交。
-     * 修法不是放宽 timeout（downloadOne 逐文件 await，写盘卡死时按钮要愣更久、且逼近 SW 的
-     * 30s 空闲回收），而是超时分支里补一次 downloads.search({id})，仍非 interrupted 才按 ok。
-     * 补完也不 airtight：finish() 会摘监听，超时点查到 in_progress 之后就再也收不到 interrupted。 */
-    timer = setTimeout(() => finish({ ok: true }), timeoutMs);
+     * 但超时那一刻**做一次终局校验**（见下面 timer 回调）：查到 interrupted 就按失败报，
+     * 只有仍不是 interrupted 才按成功。这补上了「3s 之后才 interrupted、事件已被错过」
+     * 这一种漏收——加上下面那次立即 search（兜「事件早于监听落地」），两条路都收敛到 finish 去重。
+     * 残余边界（不是已彻底解决）：校验查到 in_progress 时 finish() 会摘掉监听，
+     * 此后再发生的 interrupted 依然收不到。所以 A2 的「已提交」只能读作
+     * 「本次没抓到失败证据」，不等于确认落盘；极端慢收尾的失败仍可能显示成已提交。
+     * 不放宽 timeout 的原因不变：downloadOne 逐文件 await，写盘卡死时按钮要愣更久，
+     * 且逼近 SW 的 30s 空闲回收。 */
+    timer = setTimeout(() => {
+      /* 超时这一刻做一次终局校验：没等到事件，可能是收尾慢，也可能是记录已经是
+       * interrupted 而我们错过了。查一次再定，比一律按成功准。 */
+      Promise.resolve()
+        .then(() => chrome.downloads.search({ id }))
+        .then((items) => {
+          const item = items && items[0];
+          if (item && item.state === "interrupted") {
+            return finish({ ok: false, error: item.error || "interrupted" });
+          }
+          finish({ ok: true });
+        })
+        .catch(() => finish({ ok: true }));
+    }, timeoutMs);
     chrome.downloads.onChanged.addListener(onChanged);
     /* data: URL 可能极快收尾，事件早于监听落地，补一次查询兜住这个竞态。 */
     Promise.resolve()
@@ -143,6 +158,14 @@ async function downloadOne(file) {
     id = await chrome.downloads.download({
       filename,
       url: file.url || dataUrl(file),
+      /* 结论：同名文件一律覆盖，不用 uniquify / prompt。
+       * 不用 "uniquify"：Chrome 是**逐文件**加 " (1)" 后缀，一篇 65 张图的笔记会变成
+       *   xxx (1).png、yyy (1).jpg……而 md 里的引用是落盘前就按原名拼好的，
+       *   当场全部脱钩——比覆盖更糟。
+       * 不用 "prompt"：65 个文件弹 65 次对话框，不可用。
+       * "overwrite" 的真实代价：同一天、同标题、同作者的两次抓取会互相覆盖。这是刻意选择——
+       *   同一篇重抓本来就该幂等覆盖；跨笔记撞名概率低，且撞名时保留旧文件会让
+       *   md 引用指向新内容，更危险。 */
       conflictAction: "overwrite",
     });
   } catch (error) {
