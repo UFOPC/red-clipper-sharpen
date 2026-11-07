@@ -106,7 +106,8 @@ function settleDownload(id, timeoutMs = SETTLE_TIMEOUT) {
      * 落地」的竞态，不是「3s 之后才 interrupted」。所以 A2 按钮的「已提交」只能读作
      * 「本次没抓到失败证据」，不等于确认落盘；极慢收尾的 md/评论 json 失败会显示成已提交。
      * 修法不是放宽 timeout（downloadOne 逐文件 await，写盘卡死时按钮要愣更久、且逼近 SW 的
-     * 30s 空闲回收），而是超时分支里补一次 downloads.search({id})，仍非 interrupted 才按 ok。 */
+     * 30s 空闲回收），而是超时分支里补一次 downloads.search({id})，仍非 interrupted 才按 ok。
+     * 补完也不 airtight：finish() 会摘监听，超时点查到 in_progress 之后就再也收不到 interrupted。 */
     timer = setTimeout(() => finish({ ok: true }), timeoutMs);
     chrome.downloads.onChanged.addListener(onChanged);
     /* data: URL 可能极快收尾，事件早于监听落地，补一次查询兜住这个竞态。 */
