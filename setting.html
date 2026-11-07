@@ -18,16 +18,17 @@
     <p class="intro">图片、实况、视频与文字，按统一目录保存。<br>直接下载，无需解压。</p>
     <section aria-label="支持的网站">
       <p class="section-label">已支持 <span id="site-count">4</span> 个网站</p>
+      <!-- 顺序与 manifest 的 content_scripts.matches 一致：浏览器扩展详情页按那个顺序列权限，
+           两边顺序一样，用户可以从上往下逐条对。 -->
       <ul class="sites">
-        <li><strong>小红书</strong><span>图文笔记、实况、视频</span></li>
-        <li><strong>Chiphell</strong><span>数码论坛的帖子与回复</span></li>
-        <li><strong>少数派</strong><span>数字生活文章</span></li>
-        <li><strong>什么值得买</strong><span>原创文章与晒物长文</span></li>
-        <li><strong>微信公众号</strong><span>文章正文与图片</span></li>
-        <li><strong>远景论坛</strong><span>Discuz 帖子与附件图</span></li>
-        <li><strong>吾爱破解</strong><span>技术帖与原创工具</span></li>
-        <li><strong>恩山无线</strong><span>路由与软路由折腾帖</span></li>
-        <li><strong>耳机大家坛</strong><span>器材与听感长帖</span></li>
+        <li><strong>小红书</strong><code>xiaohongshu.com</code><span>图文笔记、实况、视频</span></li>
+        <li><strong>Chiphell</strong><code>chiphell.com</code><span>数码论坛的帖子与回复</span></li>
+        <li><strong>远景论坛</strong><code>bbs.pcbeta.com</code><span>Discuz 帖子与附件图</span></li>
+        <li><strong>恩山无线</strong><code>right.com.cn</code><span>路由与软路由折腾帖</span></li>
+        <li><strong>耳机大家坛</strong><code>erji.net</code><span>器材与听感长帖</span></li>
+        <li><strong>少数派</strong><code>sspai.com</code><span>数字生活文章</span></li>
+        <li><strong>什么值得买</strong><code>post.smzdm.com</code><span>原创文章与晒物长文</span></li>
+        <li><strong>微信公众号</strong><code>mp.weixin.qq.com</code><span>文章正文与图片</span></li>
       </ul>
     </section>
     <section aria-label="下载目录结构">
