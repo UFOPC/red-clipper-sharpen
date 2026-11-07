@@ -46,6 +46,12 @@
 > 是浏览器自动补在 `content_scripts.matches` 之后的。
 > 下厨房详情页有滑块风控，脚本化访问会拿到验证页，它的回归用例喂的是用户保存的页面快照。
 
+> **加站时两个 matches 不是一回事**：`content_scripts.matches` 可以带路径
+> （`*://m.weibo.cn/status/*` 收窄到单条微博页）；`web_accessible_resources[].matches`
+> **只允许 origin 级模式**，路径必须是 `/*`，写成 `/status/*` Chrome 会直接拒绝加载整个扩展，
+> 报 `Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.`。
+> `build.mjs` 打包前会拦这条，别只在装包时才发现。
+
 ## 安装
 
 **从 Release 安装**
@@ -151,7 +157,9 @@ Discuz! X3 的帖子页结构在各站之间高度一致，所以四个 Discuz �
 
 1. `content/discuz.js` 顶部的 `SITES` 里加一条 —— 域名正则、`source` 名、`parse()`（URL → tid/page/authorid）、
    `pageUrl()`（翻页地址）。**不需要写新的 content script。**
-2. `manifest.json` 的 `matches` 与 `web_accessible_resources.matches` 加上该域名。
+2. `manifest.json` 里 `content_scripts.matches` 与 `web_accessible_resources.matches` 各加该域名 ——
+   后者**只能写 `*://<域名>/*`**（origin 级），别把前者的 `/status/*` 这类路径顺手抄过去，
+   否则整个扩展加载失败（见上文「加站时两个 matches 不是一回事」）。
 
 改完用两个脚本验：
 

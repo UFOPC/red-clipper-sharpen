@@ -164,10 +164,9 @@
             "*://*.douban.com/*",
             "*://*.sspai.com/*",
             "*://post.smzdm.com/*",
-            "*://m.weibo.cn/status/*",
-            "*://m.weibo.cn/detail/*",
             "*://mp.weixin.qq.com/*",
-            "*://*.xiachufang.com/*"
+            "*://*.xiachufang.com/*",
+            "*://m.weibo.cn/*"
          ],
          "resources": [
             "icons/icon.svg"

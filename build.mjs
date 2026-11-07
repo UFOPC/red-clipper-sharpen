@@ -7,8 +7,9 @@
  *
  *   node build.mjs
  *
- * 只做文件复制与两处字符串改写，不引入构建链；任何一处替换未命中直接报错退出，
- * 免得发出一个「以为改了其实没改」的包。
+ * 只做文件复制与两处字符串改写，不引入构建链；替换未命中、manifest 不合法、
+ * 引用文件漏进 INCLUDE，一律在打包这一步直接报错退出，
+ * 免得发出一个「以为改了其实没改」或「装都装不上」的包。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,6 +20,24 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(ROOT, "dist");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"));
+
+/* 打包前先做一次 Chrome 会做的合法性检查。
+ * 踩过：web_accessible_resources[].matches 只允许 origin 级模式（路径必须是 /*），
+ * 写成 *://m.weibo.cn/status/* 时 Chrome 直接拒绝加载整个扩展，报
+ * 「Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.」。
+ * content_scripts.matches 反而允许带路径，两者规则不一样，容易顺手抄错。
+ * 与其等用户装包时才发现，不如在打包这一步就挡住。 */
+for (const [index, war] of (manifest.web_accessible_resources || []).entries()) {
+  for (const pattern of war.matches || []) {
+    if (!/^(?:\*|https?):\/\/[^/]+\/\*$/.test(pattern)) {
+      throw new Error(
+        `web_accessible_resources[${index}].matches 非法: ${pattern}\n` +
+        `WAR 只认 origin 级模式，路径必须是 /*；要收窄范围请改 content_scripts.matches。`
+      );
+    }
+  }
+}
+
 /* 对外版本（0.X.X）由用户确认，脚本绝不改它，也不在它后面加东西。
  * 内部流水号只做本地记账，用来回答「现在手上这个包是当前对外版本的第几次构建」：
  *   1. 存 .build-serial，每次打包 +1；
@@ -54,15 +73,51 @@ const INCLUDE = [
   "content/smzdm.css",
   "content/wechat.js",
   "content/weibo.js",
+  "content/weibo.css",
   "content/xiachufang.js",
   "content/xiachufang.css",
-  "content/weibo.css",
   "icons/icon.svg",
   "icons/icon16.png",
   "icons/icon32.png",
   "icons/icon48.png",
   "icons/icon128.png",
 ];
+
+/* 打包前自检：manifest 引用的文件必须都进了 INCLUDE、且在磁盘上真实存在；
+ * DNR 规则必须是合法 JSON，且规则 id 全局唯一（Chrome 会因重复 id 拒绝注册）。
+ * 这两类错误在装包时才暴露，用户只会看到一句「无法加载扩展」，所以提前挡住。 */
+const RULE_RESOURCES = (manifest.declarative_net_request && manifest.declarative_net_request.rule_resources) || [];
+
+function validatePackage() {
+  const refs = new Set();
+  for (const cs of manifest.content_scripts || []) {
+    for (const file of [...(cs.js || []), ...(cs.css || [])]) refs.add(file);
+  }
+  for (const rr of RULE_RESOURCES) refs.add(rr.path);
+  for (const war of manifest.web_accessible_resources || []) {
+    for (const file of war.resources || []) refs.add(file);
+  }
+  if (manifest.action && manifest.action.default_popup) refs.add(manifest.action.default_popup);
+  if (manifest.options_ui && manifest.options_ui.page) refs.add(manifest.options_ui.page);
+  if (manifest.background && manifest.background.service_worker) refs.add(manifest.background.service_worker);
+  for (const file of Object.values(manifest.icons || {})) refs.add(file);
+  for (const file of Object.values((manifest.action && manifest.action.default_icon) || {})) refs.add(file);
+
+  for (const file of refs) {
+    if (!INCLUDE.includes(file)) throw new Error(`manifest 引用了 ${file}，但它不在 INCLUDE 里`);
+    if (!fs.existsSync(path.join(ROOT, file))) throw new Error(`缺少文件: ${file}`);
+  }
+
+  const ids = new Set();
+  for (const rr of RULE_RESOURCES) {
+    const rules = JSON.parse(fs.readFileSync(path.join(ROOT, rr.path), "utf8"));
+    for (const rule of rules) {
+      if (ids.has(rule.id)) throw new Error(`DNR 规则 id 重复: ${rule.id}（${rr.path}）`);
+      ids.add(rule.id);
+    }
+  }
+}
+validatePackage();
 
 const SECTION = /\n    <section aria-label="公众号保存格式">[\s\S]*?<\/section>/;
 
