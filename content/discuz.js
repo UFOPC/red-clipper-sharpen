@@ -61,6 +61,68 @@
         `https://bbs.pcbeta.com/forum.php?mod=viewthread&tid=${tid}&page=${page}` +
         (authorId ? `&authorid=${encodeURIComponent(authorId)}` : ""),
     },
+    {
+      id: "52pojie",
+      host: /^(?:www\.)?52pojie\.cn$/i,
+      source: "吾爱破解",
+      parse(loc) {
+        const params = new URLSearchParams(loc.search);
+        const m = loc.pathname.match(/^\/thread-(\d+)-(\d+)-(\d+)\.html$/);
+        const tid = m ? m[1] : (params.get("mod") === "viewthread" ? params.get("tid") : "");
+        if (!tid) return null;
+        return {
+          tid,
+          page: (m ? Number(m[2]) : Number(params.get("page"))) || 1,
+          authorId: params.get("authorid") || "",
+          url: `https://www.52pojie.cn/thread-${tid}-1-1.html`,
+        };
+      },
+      pageUrl: ({ tid, page, authorId }) =>
+        `https://www.52pojie.cn/forum.php?mod=viewthread&tid=${tid}&page=${page}` +
+        (authorId ? `&authorid=${encodeURIComponent(authorId)}` : ""),
+    },
+    {
+      /* 恩山的帖子路径带一层 /forum/：thread-8287728-1-1.html 在 /forum/ 下 */
+      id: "right",
+      host: /^(?:www\.)?right\.com\.cn$/i,
+      source: "恩山无线",
+      parse(loc) {
+        const params = new URLSearchParams(loc.search);
+        const m = loc.pathname.match(/^\/forum\/thread-(\d+)-(\d+)-(\d+)\.html$/);
+        const tid = m ? m[1] : (params.get("mod") === "viewthread" ? params.get("tid") : "");
+        if (!tid) return null;
+        return {
+          tid,
+          page: (m ? Number(m[2]) : Number(params.get("page"))) || 1,
+          authorId: params.get("authorid") || "",
+          url: `https://www.right.com.cn/forum/thread-${tid}-1-1.html`,
+        };
+      },
+      pageUrl: ({ tid, page, authorId }) =>
+        `https://www.right.com.cn/forum/forum.php?mod=viewthread&tid=${tid}&page=${page}` +
+        (authorId ? `&authorid=${encodeURIComponent(authorId)}` : ""),
+    },
+    {
+      /* 首页 erji.net 会跳到 bbs.erji.net，帖子走 forum.php?mod=viewthread&tid=…（不静态化） */
+      id: "erji",
+      host: /^(?:bbs\.)?erji\.net$/i,
+      source: "耳机大家坛",
+      parse(loc) {
+        const params = new URLSearchParams(loc.search);
+        const m = loc.pathname.match(/^\/thread-(\d+)-(\d+)-(\d+)\.html$/);
+        const tid = m ? m[1] : (params.get("mod") === "viewthread" ? params.get("tid") : "");
+        if (!tid) return null;
+        return {
+          tid,
+          page: (m ? Number(m[2]) : Number(params.get("page"))) || 1,
+          authorId: params.get("authorid") || "",
+          url: `https://bbs.erji.net/forum.php?mod=viewthread&tid=${tid}`,
+        };
+      },
+      pageUrl: ({ tid, page, authorId }) =>
+        `https://bbs.erji.net/forum.php?mod=viewthread&tid=${tid}&page=${page}` +
+        (authorId ? `&authorid=${encodeURIComponent(authorId)}` : ""),
+    },
   ];
 
   const SITE = SITES.find((site) => site.host.test(location.hostname));

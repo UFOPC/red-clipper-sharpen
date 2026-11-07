@@ -43,7 +43,10 @@
          ],
          "matches": [
             "*://www.chiphell.com/*",
-            "*://bbs.pcbeta.com/*"
+            "*://bbs.pcbeta.com/*",
+            "*://www.52pojie.cn/*",
+            "*://www.right.com.cn/*",
+            "*://bbs.erji.net/*"
          ],
          "run_at": "document_idle"
       },
@@ -88,7 +91,7 @@
          "run_at": "document_idle"
       }
    ],
-   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景论坛帖子、少数派文章、什么值得买文章、微信公众号文章保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
+   "description": "小红虾：将小红书笔记、图片、实况与视频，以及 Chiphell / 远景 / 吾爱破解 / 恩山 / 耳机大家坛帖子、少数派文章、什么值得买文章、微信公众号文章保存到本地，自动生成 Rednote-Sharpen 格式 Markdown。",
    "host_permissions": [
       "*://*.xiaohongshu.com/*",
       "*://cdnfile.sspai.com/*",
@@ -115,6 +118,9 @@
             "*://*.xiaohongshu.com/*",
             "*://www.chiphell.com/*",
             "*://bbs.pcbeta.com/*",
+            "*://www.52pojie.cn/*",
+            "*://www.right.com.cn/*",
+            "*://bbs.erji.net/*",
             "*://sspai.com/*",
             "*://www.sspai.com/*",
             "*://post.smzdm.com/*",
