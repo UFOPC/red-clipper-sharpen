@@ -94,7 +94,8 @@
    "host_permissions": [
       "*://*.xiaohongshu.com/*",
       "*://cdnfile.sspai.com/*",
-      "*://cdn-static.sspai.com/*"
+      "*://cdn-static.sspai.com/*",
+      "*://attach.52pojie.cn/*"
    ],
    "icons": {
       "16": "icons/icon16.png",
@@ -107,6 +108,7 @@
    "name": "小红虾 · 下载助手",
    "permissions": [
       "downloads",
+      "declarativeNetRequestWithHostAccess",
       "scripting",
       "storage"
    ],
@@ -128,5 +130,14 @@
             "icons/icon.svg"
          ]
       }
-   ]
+   ],
+   "declarative_net_request": {
+      "rule_resources": [
+         {
+            "id": "media-referer",
+            "enabled": true,
+            "path": "rules/media-referer.json"
+         }
+      ]
+   }
 }
