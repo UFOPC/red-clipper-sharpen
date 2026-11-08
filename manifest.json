@@ -166,7 +166,7 @@
       "storage",
       "declarativeNetRequestWithHostAccess"
    ],
-   "version": "0.7.5",
+   "version": "0.7.6",
    "web_accessible_resources": [
       {
          "matches": [
