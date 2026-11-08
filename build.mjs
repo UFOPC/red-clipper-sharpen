@@ -1,6 +1,9 @@
 /* 打两个包：
- *   dist/小红虾-<版本>.zip        发布版：设置页没有「目录树」开关，公众号固定走通用结构
- *   dist/小红虾-self-<版本>.zip   自用版：带开关，默认「自用·对齐 Wechat-Sharpen」
+ *   dist/XHX-<版本>.zip        发布版：设置页没有「目录树」开关，公众号固定走通用结构
+ *   dist/XHX-self-<版本>.zip   自用版：带开关，默认「自用·对齐 Wechat-Sharpen」
+ *
+ * 包名前缀是 XHX（「小红虾」的缩写）：中文名在部分解压工具与非中文系统上会变成乱码，
+ * 发布物一律用拉丁前缀，仓库名与文档里的「小红虾」只作称呼。
  *
  * 版本号只有三段（0.X.X），由用户确认；内部流水号只写进本地 dist/BUILD-INFO.txt，
  * 不进包内 manifest、不进包名、不进任何打包产物。见下面 VERSION 处的说明。
@@ -182,17 +185,17 @@ function zip(dir, name) {
 fs.rmSync(DIST, { recursive: true, force: true });
 
 /* ---- 发布版 ---- */
-const relDir = path.join(DIST, `小红虾-${VERSION}`);
+const relDir = path.join(DIST, `XHX-${VERSION}`);
 copyInto(relDir, {
   "setting.html": (html) => {
     if (!SECTION.test(html)) throw new Error("发布版：找不到公众号保存格式的 section");
     return html.replace(SECTION, "");
   },
 });
-const relZip = zip(relDir, `小红虾-${VERSION}.zip`);
+const relZip = zip(relDir, `XHX-${VERSION}.zip`);
 
 /* ---- 自用版 ---- */
-const selfDir = path.join(DIST, `小红虾-self-${VERSION}`);
+const selfDir = path.join(DIST, `XHX-self-${VERSION}`);
 copyInto(selfDir, {
   "content/wechat.js": (src) => {
     let out = src;
@@ -203,7 +206,7 @@ copyInto(selfDir, {
     return out;
   },
 });
-const selfZip = zip(selfDir, `小红虾-self-${VERSION}.zip`);
+const selfZip = zip(selfDir, `XHX-self-${VERSION}.zip`);
 
 for (const file of [relZip, selfZip]) {
   const size = (fs.statSync(file).size / 1024).toFixed(0);
