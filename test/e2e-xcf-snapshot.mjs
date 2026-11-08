@@ -198,6 +198,41 @@ try {
   }
   if (at.isLast) throw new Error("胶囊挂在 .recipe-show 末尾，等于换条路径重犯老 bug");
   console.log(`  兜底    .recipe-show 第 ${at.index + 1}/${at.total} 个子节点（首个）`);
+
+  /* 无 h1 的页面上 readRecipe() 返回 null（标题取不到）。以前 act 回调把
+   * 「拿不到 info」和「按钮已禁用」一起 return，点了毫无反应——静默无效。
+   * 这条要求它显示「未识别」、零下发，并且 4 秒后还原。 */
+  await noH1.hover(".xcf-xhx-slot");
+  await noH1.waitForSelector(".xcf-xhx-panel", { state: "visible", timeout: 5000 });
+  const beforeLabel = ((await noH1.textContent(".xcf-xhx-act")) || "").trim();
+  await noH1.click(".xcf-xhx-act");
+  await noH1
+    .waitForFunction(
+      () => (document.querySelector(".xcf-xhx-act") || {}).textContent === "未识别",
+      null,
+      { timeout: 5000 }
+    )
+    .catch(() => {});
+  const shownLabel = ((await noH1.textContent(".xcf-xhx-act")) || "").trim();
+  if (shownLabel !== "未识别") {
+    throw new Error(`无 h1 页点保存后按钮是「${shownLabel}」，应显示「未识别」（点了没反应）`);
+  }
+  const sentAfterClick = (await noH1.evaluate(() => window.__SENT || [])).filter((m) => m.type === "downloadFiles");
+  if (sentAfterClick.length) {
+    throw new Error(`认不出正文的页面不该下发文件，实际 ${sentAfterClick.length} 条 downloadFiles`);
+  }
+  const restored = await noH1
+    .waitForFunction(
+      (want) => (document.querySelector(".xcf-xhx-act") || {}).textContent === want,
+      beforeLabel,
+      { timeout: 8000 }
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!restored) throw new Error(`4 秒后文案没有还原成「${beforeLabel}」`);
+  const stillDisabled = await noH1.evaluate(() => !!document.querySelector(".xcf-xhx-act").disabled);
+  if (stillDisabled) throw new Error("文案还原后按钮仍是 disabled");
+  console.log(`  未识别  点保存 → 「未识别」→ 约 4s 后还原「${beforeLabel}」，零下发`);
   await noH1.close();
   failed = false;
 } catch (e) {

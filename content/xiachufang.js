@@ -264,10 +264,25 @@
 
     const act = panel.querySelector(".xcf-xhx-act");
     act.addEventListener("click", async () => {
-      const info = readRecipe();
-      if (!info || act.disabled) return;
-      act.disabled = true;
+      if (act.disabled) return;
+      /* label 要在「可能提前 return」之前取，否则未识别分支引用不到它。 */
       const label = act.textContent;
+      const info = readRecipe();
+      /* 拿不到 info 和「按钮已禁用」不是一回事：后者是并发保护，前者是模板没认出来
+       * （例如页面根本没有 h1，标题取不到 → readRecipe 返回 null）。
+       * 以前两者一起 return，用户点一下毫无反应、以为按钮坏了——这是静默无效。
+       * 与豆瓣的 incomplete 一个口径：显示「未识别」，4 秒后走同一条还原路径。 */
+      if (!info) {
+        act.disabled = true;
+        act.textContent = "未识别";
+        setTimeout(() => {
+          act.disabled = false;
+          act.textContent = label;
+          setOpen(false);
+        }, 4000);
+        return;
+      }
+      act.disabled = true;
       const withMedia = media;
       /* md 未落盘时文案要停留久一点，900ms 眨眼就没；成功路径仍是 900ms，逐字不变。 */
       let hold = 900;
