@@ -53,7 +53,7 @@
 > （`*://m.weibo.cn/status/*` 收窄到单篇微博页）；`web_accessible_resources[].matches`
 > **只允许 origin 级模式**，路径必须是 `/*`，写成 `/status/*` Chrome 会直接拒绝加载整个扩展，
 > 报 `Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.`。
-> `build.mjs` 打包前会拦这条，别只在装包时才发现。
+> 加站时两处手改，改完先在浏览器里加载一次，别等发出去才发现。
 
 ## 安装
 

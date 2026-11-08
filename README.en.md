@@ -157,7 +157,7 @@ Those two lists do not follow the same rules, and confusing them breaks the whol
 | Path patterns | allowed | **rejected** — origin-level `*://<host>/*` only |
 | Real example | `*://m.weibo.cn/status/*`, `*://post.smzdm.com/p/*` | `*://m.weibo.cn/*`, `*://post.smzdm.com/*` |
 
-Copying a path-level pattern into the second list makes Chrome refuse to load the extension with `Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.` `build.mjs` validates both lists, so a bad pattern fails the build instead of the install.
+Copying a path-level pattern into the second list makes Chrome refuse to load the extension with `Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.` Check both lists by hand; a bad pattern only surfaces when Chrome refuses to load the whole extension.
 
 Verify with the regression scripts:
 
