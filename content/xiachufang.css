@@ -1,13 +1,15 @@
 /* 下厨房适配：入口胶囊 + 保存面板
  * 视觉与其它站一致（透明胶囊、白卡片、珊瑚主色），独立成文件——各站 content script 各注各的 CSS。
- * 胶囊挂在标题容器里，所以字号/高度都比少数派那套小一号，免得把标题行撑开。
+ * 胶囊是 h1.page-title 的兄弟节点（插在标题之后），所以按「标题下方左对齐的一行」来排，
+ * 不再是贴着标题内联的小标签。
  */
 .xcf-xhx-slot {
   position: relative;
   display: inline-flex;
   align-items: center;
-  margin-left: 10px;
-  vertical-align: middle;
+  /* 曾经是 margin-left: 10px + vertical-align: middle（那时挂在标题内部）。
+   * 改成块级兄弟后，横向留白只会变成莫名的缩进，改为与标题左边缘对齐。 */
+  margin: 6px 0 0;
 }
 
 .xcf-xhx-entry {

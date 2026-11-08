@@ -298,8 +298,11 @@
     setTimeout(refreshCount, 2500);
   }
 
+  /* 返回 h1 本身，而不是它的父容器：h1.page-title 的父节点是整篇文章的包裹 div
+   * （站方 CSS 下约 7400px 高），appendChild 进去会被塞到正文最后一行之后，
+   * 胶囊停在页面底部，用户看不到。 */
   function findAnchor() {
-    return document.querySelector("h1.page-title")?.parentElement || document.querySelector(".recipe-show");
+    return document.querySelector("h1.page-title") || document.querySelector("h1") || document.querySelector(".recipe-show");
   }
 
   function tick() {
@@ -310,7 +313,12 @@
     const anchor = findAnchor();
     if (!anchor) return;
     ensureUI();
-    if (slot.parentElement !== anchor) anchor.appendChild(slot);
+    /* 插到标题之后，而不是塞进标题里，也不是挂到它的父容器上：
+     *   进 h1  → h1.textContent 会把面板文案带进标题（豆瓣踩过这个坑）；
+     *   进父容器 → 那是约 7400px 高的包裹层，胶囊直接跑到页面底部。
+     * afterend 之后 slot.parentElement 是 h1 的父容器而非 h1，所以这里用
+     * 前一个兄弟节点判重，否则「父节点不是 anchor」永远成立、每 1.5s 重插一次。 */
+    if (slot.previousElementSibling !== anchor) anchor.insertAdjacentElement("afterend", slot);
   }
 
   document.addEventListener("click", (e) => {

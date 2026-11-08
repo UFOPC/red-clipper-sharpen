@@ -63,6 +63,39 @@ try {
   await page.addScriptTag({ path: path.join(extDir, "content/xiachufang.js") });
   await page.waitForSelector(".xcf-xhx-entry", { timeout: 10000 });
 
+  /* 胶囊「存在」不等于「看得见」：曾经 appendChild 到 h1 的父容器上，
+   * 而那个 div 是整篇文章的包裹层（站方 CSS 下约 7400px 高），
+   * 结果胶囊被塞到正文最后一行之后——离标题三千多像素，用户根本看不到。
+   * 所以位置、尺寸、标题纯净度三样都必须断言。 */
+  const geo = await page.evaluate(() => {
+    const slot = document.querySelector(".xcf-xhx-slot");
+    const h1 = document.querySelector("h1.page-title");
+    if (!slot || !h1) return null;
+    const s = slot.getBoundingClientRect();
+    const h = h1.getBoundingClientRect();
+    const entry = slot.querySelector(".xcf-xhx-entry");
+    const e = entry ? entry.getBoundingClientRect() : { width: 0, height: 0 };
+    return {
+      gap: s.top - h.top,
+      slotTop: s.top,
+      h1Top: h.top,
+      slotW: s.width,
+      slotH: s.height,
+      entryW: e.width,
+      entryH: e.height,
+    };
+  });
+  if (!geo) throw new Error("找不到 .xcf-xhx-slot 或 h1.page-title");
+  if (Math.abs(geo.gap) >= 200) {
+    throw new Error(
+      `胶囊离标题 ${Math.round(geo.gap)}px，要求 < 200px（slot.y=${Math.round(geo.slotTop)} / h1.y=${Math.round(geo.h1Top)}）：` +
+        "位置回落到包裹层末尾了"
+    );
+  }
+  if (!(geo.slotW > 0 && geo.slotH > 0 && geo.entryW > 0 && geo.entryH > 0)) {
+    throw new Error(`胶囊没有尺寸：slot ${geo.slotW}×${geo.slotH} / entry ${geo.entryW}×${geo.entryH}`);
+  }
+
   await page.hover(".xcf-xhx-slot");
   await page.waitForSelector(".xcf-xhx-panel", { state: "visible", timeout: 5000 });
   await page.click(".xcf-xhx-act");
@@ -78,6 +111,16 @@ try {
   const md = files.find((f) => f.mime === "text/markdown");
   const media = files.filter((f) => f.url);
   if (!md) throw new Error("没有产出 markdown");
+
+  /* 标题纯净度：胶囊一旦被塞进 <h1> 内部，h1.textContent 就会把面板文案
+   * 「剪藏 / N 张 / 下载 / 跳过 / 保存」一起带出来，标题要进目录名和文件名，
+   * 污染不可逆。所以要求标题行严格等于原文，且通篇不含面板字样。
+   * （豆瓣当初踩过这个坑，这里守的是「别用 appendChild 进 h1」这条路。） */
+  const h1Line = (md.text.match(/^# .*$/m) || [""])[0];
+  if (h1Line !== "# 红烧肉教程集锦") throw new Error(`标题行被污染：「${h1Line}」`);
+  for (const junk of ["剪藏", "下载", "跳过"]) {
+    if (md.text.includes(junk)) throw new Error(`md 里混进了面板文案「${junk}」`);
+  }
 
   if (!/^来源: 下厨房$/m.test(md.text)) throw new Error("frontmatter 缺「来源: 下厨房」");
   if (!/^作者: 愿爱常甜$/m.test(md.text)) throw new Error("作者没取到（.author a 选择器不对）");
@@ -101,6 +144,7 @@ try {
 
   console.log(`✓ ${md.text.split("\n").find((l) => l.startsWith("# "))}`);
   console.log(`  md      ${md.filename}`);
+  console.log(`  胶囊    距标题 ${Math.round(geo.gap)}px | 尺寸 ${Math.round(geo.slotW)}×${Math.round(geo.slotH)}`);
   console.log(`  媒体    ${media.length} 张，示例 ${media[0].filename} | ${media[0].url.slice(0, 60)}…`);
   console.log(`  用料    ${ingRows - 1} 行 | 做法 ${steps} 步 | 正文 ${md.text.length} 字符`);
   console.log(`  frontmatter:\n${md.text.split("\n---")[0].split("\n").map((l) => "    " + l).join("\n")}`);
