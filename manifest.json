@@ -117,6 +117,20 @@
       },
       {
          "matches": [
+            "*://weibo.com/detail/*",
+            "*://www.weibo.com/detail/*"
+         ],
+         "css": [
+            "content/weibo.css"
+         ],
+         "js": [
+            "js/rn-format.js",
+            "content/weibo-desktop.js"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "matches": [
             "*://*.xiachufang.com/*"
          ],
          "css": [
@@ -166,7 +180,9 @@
             "*://post.smzdm.com/*",
             "*://mp.weixin.qq.com/*",
             "*://*.xiachufang.com/*",
-            "*://m.weibo.cn/*"
+            "*://m.weibo.cn/*",
+            "*://weibo.com/*",
+            "*://www.weibo.com/*"
          ],
          "resources": [
             "icons/icon.svg"

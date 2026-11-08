@@ -123,3 +123,17 @@
 .wb-xhx-act:hover { background: #d6382d; border-color: #d6382d; }
 .wb-xhx-act[disabled] { opacity: 0.6; cursor: default; }
 .wb-xhx-act[disabled]:hover { background: #ef493d; border-color: #ef493d; }
+
+/* 桌面版专用：/detail/<mid> 的页面类名随构建变化，胶囊固定到视口，不挂页面锚点。
+ * 面板向右展开会越出视口，因此改为从右边缘对齐；其余胶囊/面板样式与移动版共用。 */
+.wbd-xhx-slot {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 2147483000;
+  margin: 0;
+}
+.wbd-xhx-slot .wb-xhx-panel {
+  left: auto;
+  right: 0;
+}
