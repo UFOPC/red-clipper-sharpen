@@ -37,7 +37,7 @@
 | 豆瓣 | `douban.com` | 影评 / 书评 / 乐评长文、小组话题、个人动态，及配图 | 影评与个人动态已实测；小组页对自动化回 403，类名按多候选兜底，认不出正文时按钮报「未识别」且一个文件都不写。图片在 `doubanio.com`，裸请求回 418，后台补 Referer 后取字节。动态页的 `h1.topic-title` 是空壳，标题退回正文首句前 24 字；整组相册图不在 DOM 里（挂在 `window._CONFIG.topic.photos`，由页面 JS 渲染），改为读内联脚本里的配置取全，md 末尾补「## 图片」把没被正文引用的图按原序列出，保证引用数 == 落盘数 |
 | 少数派 | `sspai.com` | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
-| 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
+| 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 结构与其它站点一致；只做单篇手动 |
 | 微博 | `m.weibo.cn` | 单条图文 / 组图，取 `/large/` 原图 | 只接 `/status/<id>` 与 `/detail/<id>`；视频封面不算配图，不下视频 |
 | 下厨房 | `xiachufang.com` | 菜谱简介、用料表、逐步图、成品图 | 图片剥掉 `?imageView2/…` 取原图；CDN 裸请求即 200，无需 Referer |
 
@@ -188,28 +188,11 @@ SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 
 `PW` / `PW_EXE` 指向任意一份 playwright 与 chromium 即可，不必装进仓库。
 
-## 公众号：两套目录树
+## 公众号
 
-设置页里可切换，只影响公众号（**自用版**带这个开关；发布版固定走「通用」，设置页里没有这一节）：
-
-| | 通用（发布版固定） | 自用 · 对齐 Wechat-Sharpen |
-|---|---|---|
-| 目录 | `<标题>/` | `YYYY-MM/YY-MM-DD/` |
-| 文件 | `YYYY.MM.DD_标题_公众号名.md` | `<标题>.md` |
-| 图片 | `images/<…>-01.png` | `assets/<aid8>_<NNN>_<url8>.<ext>` |
-| 引用 | `![1](./images/…)` | `![图片](assets/…)` |
-| frontmatter | 来源 / 作者 / 时间 / 类型 / 链接 | title / source / published / created |
-
-「通用」与其他站点完全一致，**发布版固定**。「自用」复刻 Wechat-Sharpen 管线 ——
-`09-Article` 里已有几十篇它的产物，同一目录出现两套命名就没法用一条 Dataview 查。
-
-两个 hash 只是稳定短标识：同一篇文章、同一张图，多次剪藏得到同一个名字；不要求和 Skill 产出的 hash 相同。
-`description` / `tags` 一律留空，交给富化阶段补 —— 扩展没有 LLM，不写空壳。
-
-切换写的是 `chrome.storage.local` 的 `layout`，content script 在页面加载时读一次，所以要**刷新文章页**才生效。
-
-**只做单篇手动。** 批量抓取、历史文章导入、订阅推送都留在 Wechat-Sharpen 侧（它有 DB / 书签 / URL 三条来源
-和登录态），扩展这边不碰，避免踩微信的批量抓取条款。
+单篇手动剪藏，落盘结构与其它站点完全一致：`<标题>/` 目录下 `YYYY.MM.DD_标题_公众号名.md`
+配 `images/`。批量抓取、历史文章导入、订阅推送都不在本扩展范围内——微信对批量抓取有明确条款，
+这条线不碰。
 
 ## 项目结构
 
@@ -223,7 +206,7 @@ content/
   index.js|css         小红书：胶囊、面板、评论展开、进度、清晰度、原视频
   discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景 / 恩山 / 耳机大家坛）：作者模式、跨页、附件格
   douban.js|css        豆瓣：影评 / 书评 / 乐评 + 小组话题 + 个人动态，图片经后台补 Referer 取字节
-  wechat.js            微信公众号：与 Wechat-Sharpen 同构的落盘规范
+  wechat.js            微信公众号：正文与图片解析
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
   weibo.js|css         微博：单条图文，图片升级到 `/large/` 原图

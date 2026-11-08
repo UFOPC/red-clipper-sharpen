@@ -41,7 +41,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 | Douban | `douban.com` | Long-form movie / book / music reviews, group topics, personal timelines, with images | Reviews and timelines are verified; group pages answer 403 to automated requests, so their class names are matched through a candidate list — when the body cannot be found the button reports "unrecognised" and nothing is written. Images live on `doubanio.com` and return 418 to bare requests; the worker attaches a Referer and fetches the bytes. On timelines `h1.topic-title` is an empty shell, so the title falls back to the first 24 characters of the body; the album images are not in the DOM at all (they hang off `window._CONFIG.topic.photos` and are rendered by page JS), so they are read from the inline config instead, and a trailing "## 图片" section lists every image the body never referenced — the reference count always equals the number of files written |
 | SSPAI | `sspai.com` | Article body, images, comments | Direct image requests return 403; bytes are fetched by the content script |
 | SMZDM | `post.smzdm.com` | Article body, images, in-page video, comments | Only `/p/` article pages; image `.jpg` suffixes are unreliable, MIME must be restored |
-| WeChat public accounts | `mp.weixin.qq.com` | Article body and images | The self-use build can switch its output layout to match Wechat-Sharpen; the release build always uses the generic tree |
+| WeChat public accounts | `mp.weixin.qq.com` | Article body and images | Same tree as every other site; single-article manual saving only |
 | Weibo | `m.weibo.cn` | Single image-text or gallery post, upgraded to `/large/` originals | Only `/status/<id>` and `/detail/<id>`; video posters do not count as images, and videos are not downloaded |
 | Xiachufang | `xiachufang.com` | Recipe intro, ingredient table, step images, finished-dish images | Strips the `?imageView2/…` thumbnail instruction to get the original; the CDN answers bare requests with 200, no Referer needed |
 
@@ -53,7 +53,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 
 **From a Release**
 
-1. Download the latest `XHX-<version>.zip` (XHX is short for Xiao Hong Xia) and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned). Running `node build.mjs` also produces a self-use build (`XHX-self-<version>.zip`) that is **not attached to releases**: identical, except that WeChat public-account posts default to the Wechat-Sharpen layout and the options page keeps a layout switch for them
+1. Download the latest `XHX-<version>.zip` (XHX is short for Xiao Hong Xia) and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned).
 2. Open `chrome://extensions` (or `edge://extensions` on Edge)
 3. Turn on "Developer mode" in the top-right corner
 4. Click "Load unpacked" and select the extracted folder
@@ -93,8 +93,7 @@ S101CanyonWeekend/
     └── 2026.08.03_S101CanyonWeekend-01-c2.png
 ```
 
-All sites use this layout. WeChat public-account posts are the one exception: the self-use build can switch them
-to a Wechat-Sharpen-compatible tree on the options page. In the `comments/` examples, `01` identifies the owning top-level comment and is inherited by nested replies; `cN` is a global comment-image counter for the whole post and never resets within an individual comment.
+All sites use this layout. In the `comments/` examples, `01` identifies the owning top-level comment and is inherited by nested replies; `cN` is a global comment-image counter for the whole post and never resets within an individual comment.
 
 ```yaml
 ---
@@ -170,21 +169,11 @@ PW=… PW_EXE=… node test/regress-discuz.mjs <old-dir> <new-dir> <thread-snaps
 PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthread-1079227-1-1.html
 ```
 
-## WeChat: two layouts
+## WeChat public accounts
 
-WeChat articles can be written in either layout. The switch exists **only in the self-use build**: the release build strips that section from the settings page and always uses the native layout.
-
-| | Native (release-fixed) | Self-use · aligned with Wechat-Sharpen |
-|---|---|---|
-| Folder | `<title>/` | `YYYY-MM/YY-MM-DD/` |
-| File | `YYYY.MM.DD_<title>_<account>.md` | `<title>.md` |
-| Images | `images/<…>-01.png` | `assets/<aid8>_<NNN>_<url8>.<ext>` |
-| References | `![1](./images/…)` | `![image](assets/…)` |
-| frontmatter | `来源 / 作者 / 时间 / 类型 / 链接` | `title / source / published / created` |
-
-Native output matches every other site. The self-use layout reproduces the Wechat-Sharpen pipeline because an existing `09-Article` folder already holds dozens of its files — two naming schemes in one folder break a single Dataview query.
-
-The switch writes `layout` into `chrome.storage.local`; the content script reads it once at page load, so **reload the article page** after flipping it.
+Single-article manual saving only; the output tree is identical to every other site (`<title>/` with
+`YYYY.MM.DD_<title>_<account>.md` plus `images/`). Bulk scraping, importing article history, and subscription
+feeds are out of scope — WeChat has explicit terms against bulk fetching, and this extension stays clear of them.
 
 ## Project structure
 
@@ -200,7 +189,7 @@ content/
   douban.js|css        Douban: reviews, group topics and timelines, with Referer-guarded image bytes
   sspai.js|css         SSPAI: includes hotlink-protection handling
   smzdm.js|css         SMZDM: includes MIME restoration and video decryption
-  wechat.js            WeChat public accounts: Wechat-Sharpen-compatible output layout
+  wechat.js            WeChat public accounts: body and image parsing
   weibo.js|css         Weibo: single post, images upgraded to `/large/`
   weibo-desktop.js     Weibo desktop: experimental, API not verified under a login
   xiachufang.js|css    Xiachufang: recipe parsing, thumbnail-instruction stripping
