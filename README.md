@@ -1,6 +1,6 @@
 # 小红虾 · 下载助手
 
-> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、论坛帖子、豆瓣影评、少数派文章、什么值得买文章，
+> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、论坛帖子、豆瓣影评与小组话题、少数派文章、什么值得买文章，
 > 连同图片、视频、评论，存成一份带 YAML frontmatter 的 Markdown + 分类媒体目录。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
@@ -33,7 +33,7 @@
 | 远景论坛 | `bbs.pcbeta.com` | 论坛帖子正文与全部图片 | 与 Chiphell 共用一套 Discuz 引擎，零新增 JS |
 | 恩山无线 | `right.com.cn` | 论坛帖子正文与全部图片 | 同上；站方有滑块风控，脚本化跑会撞验证码 |
 | 耳机大家坛 | `erji.net` | 论坛帖子正文、图片、回复 | 帖子不静态化，走 `forum.php?mod=viewthread` |
-| 豆瓣 | `douban.com` | 影评 / 书评 / 乐评长文与配图 | 图片在 `doubanio.com`，裸请求回 418；后台补 Referer 后取字节 |
+| 豆瓣 | `douban.com` | 影评 / 书评 / 乐评长文、小组话题，及配图 | 影评结构已实测；小组页对自动化回 403，类名按多候选兜底，认不出正文时按钮报「未识别」且一个文件都不写。图片在 `doubanio.com`，裸请求回 418，后台补 Referer 后取字节 |
 | 少数派 | `sspai.com` | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
 | 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
@@ -173,6 +173,9 @@ PW=… PW_EXE=… node test/e2e-real-discuz.mjs https://bbs.pcbeta.com/viewthrea
 # 豆瓣：额外断言「每张图都拿到真字节」（裸请求会 418，不能退回原地址）
 PW=… PW_EXE=… node test/e2e-real-douban.mjs https://movie.douban.com/review/17890635/
 
+# 豆瓣小组话题：小组/社区侧对自动化回 403，真页面跑不了，用例用自造页面离线跑
+PW=… node test/douban-topic.mjs
+
 # 微博：断言图片已升级成 /large/ 且拿到真字节（裸请求会 403）
 PW=… PW_EXE=… node test/e2e-real-weibo.mjs https://m.weibo.cn/status/5359048358626912
 
@@ -216,7 +219,7 @@ js/
 content/
   index.js|css         小红书：胶囊、面板、评论展开、进度、清晰度、原视频
   discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景 / 恩山 / 耳机大家坛）：作者模式、跨页、附件格
-  douban.js|css        豆瓣：影评长文，图片经后台补 Referer 取字节
+  douban.js|css        豆瓣：影评 / 书评 / 乐评 + 小组话题，图片经后台补 Referer 取字节
   wechat.js            微信公众号：与 Wechat-Sharpen 同构的落盘规范
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
@@ -274,7 +277,7 @@ export SNAP=~/Pictures/<菜谱页面快照>.html
 for f in test/unit-*.mjs test/xhs-*.mjs test/smzdm-*.mjs test/sspai-*.mjs \
          test/e2e-discuz-blocked.mjs test/e2e-xcf-snapshot.mjs \
          test/one-click.mjs test/chh-attach.mjs test/quality-default.mjs \
-         test/panel-compare.mjs test/panel-fit.mjs; do
+         test/panel-compare.mjs test/panel-fit.mjs test/douban-topic.mjs; do
   node "$f" >/dev/null 2>&1 || echo "FAIL $f"
 done
 ```

@@ -1,9 +1,9 @@
 # Xiao Hong Xia · Download Assistant
 
 > A Chrome / Edge extension (Manifest V3) that saves Xiaohongshu notes, Discuz forum threads (Chiphell, PCbeta,
-> Enshan, Erji), Douban reviews, SSPAI articles, SMZDM articles, WeChat public-account posts, single Weibo posts,
-> and Xiachufang recipes — together with their images, videos, and comments — as a Markdown file with YAML
-> frontmatter plus media organized into dedicated folders.
+> Enshan, Erji), Douban reviews and group topics, SSPAI articles, SMZDM articles, WeChat public-account posts,
+> single Weibo posts, and Xiachufang recipes — together with their images, videos, and comments — as a Markdown
+> file with YAML frontmatter plus media organized into dedicated folders.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
@@ -38,7 +38,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 | PCbeta | `bbs.pcbeta.com` | Thread body and all images | Same Discuz engine as Chiphell — no extra JS |
 | Enshan | `right.com.cn` | Thread body and all images | Same engine as above; the site runs slider captcha, so scripted runs hit a challenge |
 | Erji | `erji.net` | Thread body, images, replies | Threads are not statically cached; served via `forum.php?mod=viewthread` |
-| Douban | `douban.com` | Long-form movie / book / music reviews with images | Images live on `doubanio.com` and return 418 to bare requests; the worker attaches a Referer and fetches the bytes |
+| Douban | `douban.com` | Long-form movie / book / music reviews, group topics, with images | Review markup is verified; group pages answer 403 to automated requests, so their class names are matched through a candidate list — when the body cannot be found the button reports "unrecognised" and nothing is written. Images live on `doubanio.com` and return 418 to bare requests; the worker attaches a Referer and fetches the bytes |
 | SSPAI | `sspai.com` | Article body, images, comments | Direct image requests return 403; bytes are fetched by the content script |
 | SMZDM | `post.smzdm.com` | Article body, images, in-page video, comments | Only `/p/` article pages; image `.jpg` suffixes are unreliable, MIME must be restored |
 | WeChat public accounts | `mp.weixin.qq.com` | Article body and images | The self-use build can switch its output layout to match Wechat-Sharpen; the release build always uses the generic tree |
@@ -193,7 +193,7 @@ js/
 content/
   index.js|css         Xiaohongshu: capsule, panel, comment expansion, progress, quality, original video
   discuz.js|css        Discuz! X engine (Chiphell / PCbeta / Enshan / Erji): author mode, paging, attachment grid
-  douban.js|css        Douban: reviews, with Referer-guarded image bytes
+  douban.js|css        Douban: reviews and group topics, with Referer-guarded image bytes
   sspai.js|css         SSPAI: includes hotlink-protection handling
   smzdm.js|css         SMZDM: includes MIME restoration and video decryption
   wechat.js            WeChat public accounts: Wechat-Sharpen-compatible output layout
