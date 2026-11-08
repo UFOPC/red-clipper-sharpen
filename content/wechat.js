@@ -1,12 +1,11 @@
 /* 微信公众号（mp.weixin.qq.com/s/…）适配
  *
- * 落盘规范**对齐 Wechat-Sharpen 管线**，不是小红虾原生的 <标题>/ 结构：
- *   目录   YYYY-MM/YY-MM-DD/            （与 09-Article 里的存量同构，拖进去就能合流）
- *   文件   <标题>.md
- *   图片   assets/<文章hash8>_<三位序号>_<图片hash8>.<真实扩展名>
- *   引用   ![图片](assets/xxx.png)
- *   frontmatter  title / source / published / created
- * description 与 tags 留给富化阶段（Wechat-Sharpen 的 classify_pipeline），这里不写空壳。
+ * 落盘结构与其它站点一致，走 RN.layout()：
+ *   目录   <标题>/
+ *   文件   YYYY.MM.DD_<标题>_<公众号名>.md
+ *   图片   images/<…>-01.png
+ *   引用   ![1](./images/…)
+ *   frontmatter  来源 / 作者 / 时间 / 类型 / 链接
  *
  * 结构要点（2026-11 实测）：
  *   标题  #activity-name（内有 span.js_title_inner）
@@ -19,16 +18,17 @@
 (() => {
   const RN = globalThis.__RN;
   if (!RN) return;
+  /* 命名策略：默认识别 <标题>/ + images/ + 中文 frontmatter。
+   * 页面若先加载了策略脚本（globalThis.__WX_NAMING），目录、图片名、引用写法、
+   * md 文件名与 frontmatter 全部交给它，本文件只负责取数与拼装。 */
+  const NAMING = globalThis.__WX_NAMING || null;
   if (!/^mp\.weixin\.qq\.com$/i.test(location.hostname)) return;
   const path = location.pathname.match(/^\/s\/?([\w-]+)?/);
   if (!path) return;
   if (document.querySelector(".xhx-dz-btn")) return;
 
   const PREFS_KEY = "wx-prefs";
-  const LAYOUT_KEY = "layout";
   const prefs = { media: true };
-  /* 由设置页决定：native（小红虾原生）/ sharpen（对齐 Wechat-Sharpen） */
-  let layoutMode = "native";
   const MAX_IMAGES = 300;
   const BLOCK = new Set(["section", "p", "div", "blockquote", "ul", "ol", "li", "tr", "table", "figure", "figcaption", "pre"]);
   const DROP = /^(script|style|svg|mp-style-type|iframe|video|audio|source)$/;
@@ -169,8 +169,6 @@
 
   /* ---------------- 落盘规划 ---------------- */
 
-  const pad = (n) => (n < 10 ? "0" + n : String(n));
-
   function hash8(text) {
     let h = 0x811c9dc5;
     const s = String(text);
@@ -179,28 +177,6 @@
       h = Math.imul(h, 0x01000193) >>> 0;
     }
     return h.toString(16).padStart(8, "0");
-  }
-
-  function safeName(text) {
-    return String(text || "")
-      .replace(/[\\/:*?"<>|\x00-\x1f]/g, "_")
-      .replace(/\s+/g, " ")
-      .replace(/^[.\s]+|[.\s]+$/g, "")
-      .slice(0, 80) || "未命名";
-  }
-
-  function dirOf(date) {
-    const d = date || new Date();
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  function todayStamp() {
-    const d = new Date();
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  function quote(text) {
-    return '"' + String(text || "").replace(/"/g, '\\"') + '"';
   }
 
   /* ---------------- 组装 ---------------- */
@@ -222,11 +198,9 @@
     const aid = hash8(stable || (location.pathname.length > 2 ? location.pathname : location.pathname + location.search));
     const date = pubDate(published);
     const timeMs = date ? date.getTime() : Date.now();
-    /* native = 小红虾原生结构（<标题>/ + images/ + 中文 frontmatter），发布版默认；
-     * sharpen = 对齐 Wechat-Sharpen 存量（YYYY-MM/YY-MM-DD/ + assets/ + 英文 frontmatter），自用默认。 */
-    const native = layoutMode !== "sharpen";
-    const layout = native ? RN.layout(title, account, timeMs) : null;
-    const dir = native ? layout.prefix : dirOf(date) + "/";
+    const layout = RN.layout(title, account, timeMs);
+    const dir = NAMING && NAMING.dir ? NAMING.dir({ layout, timeMs }) : layout.prefix;
+    const mdName = NAMING && NAMING.md ? NAMING.md({ layout, title, dir }) : layout.md;
 
     const media = [];
     const byUrl = new Map();
@@ -236,7 +210,8 @@
       ? (src, index) => {
         if (byUrl.has(src)) {
           const cached = byUrl.get(src);
-          return native ? `![${media.find((m) => m.url === src).no}](${RN.rel(cached)})` : `![图片](${cached})`;
+          const no = media.find((m) => m.url === src).no;
+          return NAMING && NAMING.ref ? NAMING.ref({ no, path: cached }) : `![${no}](${RN.rel(cached)})`;
         }
         if (media.length >= MAX_IMAGES) {
           truncatedImages = true;
@@ -244,12 +219,12 @@
         }
         const ext = extOf(src);
         const no = media.length + 1;
-        const relPath = native
-          ? RN.mediaPath(layout.mediaStem, no, ext)
-          : `assets/${aid}_${String(index).padStart(3, "0")}_${hash8(src)}${ext}`;
+        const relPath = NAMING && NAMING.image
+          ? NAMING.image({ layout, no, ext, src, index, aid })
+          : RN.mediaPath(layout.mediaStem, no, ext);
         media.push({ url: src, no, path: relPath });
         byUrl.set(src, relPath);
-        return native ? `![${no}](${RN.rel(relPath)})` : `![图片](${relPath})`;
+        return NAMING && NAMING.ref ? NAMING.ref({ no, path: relPath }) : `![${no}](${RN.rel(relPath)})`;
       }
       : null;
 
@@ -259,8 +234,9 @@
       url: item.url,
     }));
 
-    const front = native
-      ? RN.frontmatter({
+    const front = NAMING && NAMING.frontmatter
+      ? NAMING.frontmatter({ title, account, published, url, timeMs, counts: { images: media.length, videos: 0 } })
+      : RN.frontmatter({
         title,
         nick: account,
         timeMs,
@@ -269,24 +245,16 @@
         noteId: aid,
         source: "微信公众号",
         url,
-      })
-      : [
-        "---",
-        `title: ${quote(title)}`,
-        `source: ${quote(url)}`,
-        `published: ${quote(published)}`,
-        `created: ${quote(todayStamp())}`,
-        "---",
-      ].join("\n");
+      });
 
-    const parts = [front, ""];
-    if (native) parts.push(`# ${title}`, "");
+    /* 策略自己负责标题层级时（例如 frontmatter 之后不再写 H1），把标题传下去。 */
+    const parts = NAMING && NAMING.heading === false ? [front, ""] : [front, "", `# ${title}`, ""];
     parts.push(markdown, "");
     /* 超上限被丢掉的那批图必须在产物里说一声，否则 md 看起来完整、实际少一截。 */
     if (truncatedImages) parts.push(`> 已截断：仅保留前 ${MAX_IMAGES} 张图。`, "");
 
     files.push({
-      filename: native ? layout.md : `${dir}${safeName(title)}.md`,
+      filename: mdName,
       text: parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n",
       mime: "text/markdown",
     });
@@ -298,7 +266,6 @@
       dir: dir.replace(/\/$/, ""),
       mediaCount: media.length,
       chars: markdown.length,
-      mode: native ? "native" : "sharpen",
     };
   }
 
@@ -307,10 +274,9 @@
   function loadPrefs() {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get([PREFS_KEY, LAYOUT_KEY], (data) => {
+        chrome.storage.local.get([PREFS_KEY], (data) => {
           const saved = data && data[PREFS_KEY];
           if (saved && typeof saved === "object") prefs.media = saved.media !== false;
-          layoutMode = data && data[LAYOUT_KEY] === "sharpen" ? "sharpen" : "native";
           resolve();
         });
       } catch (e) {

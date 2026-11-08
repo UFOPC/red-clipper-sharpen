@@ -36,13 +36,3 @@ li span { color: #806e64; }
 .hint { font-size: 11px; line-height: 1.7; color: #947e70; margin: 0 0 12px; }
 footer { border-top: 1px solid #eadfd5; padding-top: 12px; display: flex; align-items: center; gap: 8px; color: #927c70; font-size: 10px; }
 .dot { color: #ef493d; }
-
-.layout-switch { display: flex; gap: 6px; margin: 0 0 10px; }
-.layout-switch button {
-  flex: 1; padding: 7px 8px; font-size: 11px; line-height: 1.4; cursor: pointer;
-  font-family: inherit; color: #806e64; background: #fffdf9;
-  border: 1px solid #e6d3c4; border-radius: 9px;
-}
-.layout-switch button[aria-pressed="true"] {
-  color: #c54b3d; background: #fef1ec; border-color: #ef493d; font-weight: 600;
-}
