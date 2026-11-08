@@ -42,7 +42,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 | SSPAI | `sspai.com` | Article body, images, comments | Direct image requests return 403; bytes are fetched by the content script |
 | SMZDM | `post.smzdm.com` | Article body, images, in-page video, comments | Only `/p/` article pages; image `.jpg` suffixes are unreliable, MIME must be restored |
 | WeChat public accounts | `mp.weixin.qq.com` | Article body and images | Same tree as every other site; single-article manual saving only |
-| Weibo | `m.weibo.cn` | Single image-text or gallery post, upgraded to `/large/` originals | Only `/status/<id>` and `/detail/<id>`; video posters do not count as images, and videos are not downloaded |
+| Weibo | `m.weibo.cn` | **Single post only** — image-text or gallery, upgraded to `/large/` originals | **One post at a time**: only `/status/<id>` and `/detail/<id>`; user timelines, topic feeds and bulk saving are not supported. Video posters do not count as images, and videos are not downloaded |
 | Xiachufang | `xiachufang.com` | Recipe intro, ingredient table, step images, finished-dish images | Strips the `?imageView2/…` thumbnail instruction to get the original; the CDN answers bare requests with 200, no Referer needed |
 
 > The desktop Weibo adapter (`weibo.com/detail/<mid>`) is wired into the manifest, but its API fields are built
@@ -190,7 +190,7 @@ content/
   sspai.js|css         SSPAI: includes hotlink-protection handling
   smzdm.js|css         SMZDM: includes MIME restoration and video decryption
   wechat.js            WeChat public accounts: body and image parsing
-  weibo.js|css         Weibo: single post, images upgraded to `/large/`
+  weibo.js|css         Weibo: single post only, images upgraded to `/large/`
   weibo-desktop.js     Weibo desktop: experimental, API not verified under a login
   xiachufang.js|css    Xiachufang: recipe parsing, thumbnail-instruction stripping
   format-size.js       size formatting (base 1000, no library)

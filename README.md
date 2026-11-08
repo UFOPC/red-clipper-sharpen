@@ -1,7 +1,7 @@
 # 小红虾 · 下载助手
 
 > 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、Discuz 论坛帖子（Chiphell / 远景 / 恩山 / 耳机大家坛）、
-> 豆瓣影评与小组话题、少数派文章、什么值得买文章、微信公众号文章、单条微博、下厨房菜谱，
+> 豆瓣影评与小组话题、少数派文章、什么值得买文章、微信公众号文章、单篇微博、下厨房菜谱，
 > 连同图片、视频、评论，存成一份带 YAML frontmatter 的 Markdown + 分类媒体目录。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
@@ -38,7 +38,7 @@
 | 少数派 | `sspai.com` | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
 | 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 结构与其它站点一致；只做单篇手动 |
-| 微博 | `m.weibo.cn` | 单条图文 / 组图，取 `/large/` 原图 | 只接 `/status/<id>` 与 `/detail/<id>`；视频封面不算配图，不下视频 |
+| 微博 | `m.weibo.cn` | **单篇**图文 / 组图，取 `/large/` 原图 | **只做单篇**：仅 `/status/<id>` 与 `/detail/<id>`，用户主页、话题页、批量都不支持；视频封面不算配图，不下视频 |
 | 下厨房 | `xiachufang.com` | 菜谱简介、用料表、逐步图、成品图 | 图片剥掉 `?imageView2/…` 取原图；CDN 裸请求即 200，无需 Referer |
 
 > 表格、弹窗、`manifest.content_scripts.matches` 三处**顺序一致**。浏览器扩展详情页按 manifest 的
@@ -50,7 +50,7 @@
 > 下厨房详情页有滑块风控，脚本化访问会拿到验证页，它的回归用例喂的是用户保存的页面快照。
 
 > **加站时两个 matches 不是一回事**：`content_scripts.matches` 可以带路径
-> （`*://m.weibo.cn/status/*` 收窄到单条微博页）；`web_accessible_resources[].matches`
+> （`*://m.weibo.cn/status/*` 收窄到单篇微博页）；`web_accessible_resources[].matches`
 > **只允许 origin 级模式**，路径必须是 `/*`，写成 `/status/*` Chrome 会直接拒绝加载整个扩展，
 > 报 `Invalid value for 'web_accessible_resources[0]'. Invalid match pattern.`。
 > `build.mjs` 打包前会拦这条，别只在装包时才发现。
@@ -209,7 +209,7 @@ content/
   wechat.js            微信公众号：正文与图片解析
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
-  weibo.js|css         微博：单条图文，图片升级到 `/large/` 原图
+  weibo.js|css         微博：单篇图文，图片升级到 `/large/` 原图
   weibo-desktop.js     微博桌面版：实验，接口未在登录态验证
   xiachufang.js|css    下厨房：菜谱解析，剥掉缩略图转码指令
   format-size.js       体积格式化（1000 进制，不引库）
