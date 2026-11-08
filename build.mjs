@@ -73,6 +73,7 @@ const INCLUDE = [
   "content/smzdm.css",
   "content/wechat.js",
   "content/weibo.js",
+  "content/weibo-desktop.js",
   "content/weibo.css",
   "content/xiachufang.js",
   "content/xiachufang.css",
