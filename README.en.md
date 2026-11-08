@@ -53,7 +53,7 @@ This extension does exactly one thing: **click once on the page, and get a folde
 
 **From a Release**
 
-1. Download the latest `XHX-<version>.zip` (XHX is short for Xiao Hong Xia) and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned). An `XHX-self-<version>.zip` build also exists: identical, except that WeChat public-account posts default to the Wechat-Sharpen layout and the options page keeps a layout switch for them
+1. Download the latest `XHX-<version>.zip` (XHX is short for Xiao Hong Xia) and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned). Running `node build.mjs` also produces a self-use build (`XHX-self-<version>.zip`) that is **not attached to releases**: identical, except that WeChat public-account posts default to the Wechat-Sharpen layout and the options page keeps a layout switch for them
 2. Open `chrome://extensions` (or `edge://extensions` on Edge)
 3. Turn on "Developer mode" in the top-right corner
 4. Click "Load unpacked" and select the extracted folder
