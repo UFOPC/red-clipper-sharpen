@@ -33,7 +33,9 @@
   if (!RN) return;
 
   const REVIEW_RE = /^\/review\/(\d+)\/?$/;
-  const TOPIC_RE = /^\/group\/topic\/(\d+)\/?$/;
+  /* 豆瓣话题有两种地址：老的小组内 /group/topic/<id>/，新的顶层 /topic/<id>/。
+   * 页面模板是同一套，所以共用 readTopic()，只在这里放宽路径。 */
+  const TOPIC_RE = /^\/(?:group\/)?topic\/(\d+)\/?$/;
   const SKIP_IMG = /\/(icon|avatar|upfallback)\//i;
   const UA_REFERER = "https://www.douban.com/";
 
@@ -247,7 +249,9 @@
       time: parseDateText((timeEl || {}).textContent),
       body: text,
       images,
-      url: location.origin + "/group/topic/" + m[1] + "/",
+      /* 链接按用户实际打开的那条写：/topic/ 与 /group/topic/ 是两种形态，
+       * 写死其中一种会让 frontmatter 里的地址点开 404 或跳错页。 */
+      url: location.origin + location.pathname,
       /* 正文抓空 = 候选选择器全没命中。标记出去，让保存路径在写盘前拦住。 */
       incomplete: !text,
     };

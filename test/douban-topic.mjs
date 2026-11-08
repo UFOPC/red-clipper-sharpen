@@ -31,6 +31,8 @@ const BROWSER =
   process.env.PW_EXE || "C:/Users/China/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe";
 
 const TOPIC_URL = "https://www.douban.com/group/topic/502472541/";
+/* 豆瓣把话题页扩到了顶层 /topic/<id>/，模板与小组内那套一致，只是地址短了。 */
+const TOPIC_TOP_URL = "https://www.douban.com/topic/502558660/";
 const GROUP_URL = "https://www.douban.com/group/220619/";
 
 const TITLE = "小组话题离线用例标题";
@@ -208,6 +210,29 @@ try {
   await home.waitForTimeout(1200); // 跨过一次 1.5s 的 tick 与 MutationObserver
   const n = await home.evaluate(() => document.querySelectorAll(".db-xhx-entry").length);
   check(`首页胶囊数量为 0（实际 ${n}）`, n === 0);
+
+  /* ---------- 顶层 /topic/<id>/（豆瓣把话题页从小组内扩到了顶层） ----------
+   * 这条是「路径变了没人测」漏掉的回归：模板没变，只是地址换了，
+   * 所以 DOM 直接复用 buildTopic()，只换 URL。 */
+  console.log("\n[5] 顶层话题页 /topic/<id>/");
+  const top = await openPage(TOPIC_TOP_URL, buildTopic());
+  await top.waitForSelector(".db-xhx-entry", { timeout: 10000 });
+  check("/topic/<id>/ 也能注入胶囊", true);
+  await top.hover(".db-xhx-slot");
+  await top.waitForSelector(".db-xhx-panel", { state: "visible", timeout: 5000 });
+  await top.click(".db-xhx-act");
+  await mdSent(top);
+  const topFiles = (await sentOf(top)).filter((m) => m.type === "downloadFiles").flatMap((m) => m.data.files || []);
+  const topMd = topFiles.find((f) => f.mime === "text/markdown");
+  if (!topMd) throw new Error("/topic/ 页没有产出 markdown");
+  check("md 能装配出正文与图片", topMd.text.includes("第一段正文") && /!\[1\]\(/.test(topMd.text));
+  /* frontmatter 的链接必须是用户实际打开的那条，不能一律写成 /group/topic/。 */
+  check(
+    `链接保留 /topic/ 形态（实际「${(/^链接: (.*)$/m.exec(topMd.text) || [])[1]}」）`,
+    /^链接: https:\/\/www\.douban\.com\/topic\/502558660\/$/m.test(topMd.text)
+  );
+  check(`文件名正常（实际「${topMd.filename}」）`, /小组话题离线用例标题/.test(topMd.filename) && !/剪藏/.test(topMd.filename));
+  await top.close();
 
   await page.close();
   await home.close();
