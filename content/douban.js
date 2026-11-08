@@ -111,6 +111,85 @@
     return /^(jpe?g|png|gif|webp|avif|bmp|svg)$/.test(ext) ? "." + ext : ".jpg";
   }
 
+  /* 个人动态页（/topic/<id>/）的相册**不在 DOM 里**：整组图塞在
+   *   window._CONFIG.topic = { id: "…", photos: [ {image:{large:{url:…}}} ] }
+   * 再由页面 JS 渲染进 #horizontal-root。内容脚本跑在隔离世界，读不到页面的 window；
+   * 而这段赋值语句就在 <script> 的文本里，直接读文本即可。
+   *
+   * 两个限制决定了写法：
+   *   1. 外层对象是**非严格 JSON**（`{ id: "…" }` 键没加引号），不能整段 JSON.parse；
+   *   2. MV3 内容脚本里 eval / new Function 被 CSP 挡死，也不能当 JS 求值。
+   * 所以只对 photos 那个数组做括号平衡扫描 + JSON.parse（数组本身是标准 JSON），
+   * 解析失败再用正则捞 "large":{"url"} 兜底。
+   *
+   * 之所以不走后台 MAIN world 注入：那需要 host_permissions 加 *.douban.com，
+   * 而这里要读的只是一段静态文本，不值得为此扩权限。 */
+  function albumPhotos() {
+    const urls = [];
+    const push = (raw) => {
+      const url = String(raw || "").replace(/\\\//g, "/");
+      if (!/^https?:\/\//i.test(url) || SKIP_IMG.test(url) || urls.includes(url)) return;
+      urls.push(url);
+    };
+
+    for (const el of document.querySelectorAll("script:not([src])")) {
+      const text = el.textContent || "";
+      if (text.indexOf("_CONFIG.topic") < 0) continue;
+      const at = text.indexOf("photos");
+      const open = at < 0 ? -1 : text.indexOf("[", at);
+      if (open < 0) continue;
+
+      /* 平衡扫描要跳过字符串里的 [] 与转义，否则 url 里的括号会把深度带偏。 */
+      let depth = 0;
+      let inStr = false;
+      let esc = false;
+      let close = -1;
+      for (let i = open; i < text.length; i++) {
+        const c = text[i];
+        if (inStr) {
+          if (esc) esc = false;
+          else if (c === "\\") esc = true;
+          else if (c === '"') inStr = false;
+          continue;
+        }
+        if (c === '"') inStr = true;
+        else if (c === "[") depth++;
+        else if (c === "]") {
+          depth--;
+          if (!depth) {
+            close = i;
+            break;
+          }
+        }
+      }
+      const slice = close > open ? text.slice(open, close + 1) : "";
+
+      if (slice) {
+        try {
+          for (const item of JSON.parse(slice)) {
+            const img = (item && item.image) || {};
+            const large = img.large || img.normal || img;
+            push(large && large.url);
+          }
+        } catch (e) {
+          /* 形状变了：落到正则兜底，别整页放弃。 */
+        }
+      }
+      if (!urls.length) {
+        const re = /"large"\s*:\s*\{[^{}]*?"url"\s*:\s*"([^"]+)"/g;
+        let m;
+        while ((m = re.exec(slice || text))) push(m[1]);
+      }
+      if (urls.length) return urls;
+    }
+
+    /* 相册已经被渲染出来时（页面 JS 跑完），直接从 DOM 兜底取。 */
+    for (const img of document.querySelectorAll("#horizontal-root img, .topic-content img")) {
+      push(imageUrl(img));
+    }
+    return urls;
+  }
+
   /* 胶囊是挂进 h1 的子节点，直接读 h1.textContent 会把面板文案
    * 「剪藏 / 图片 / N 张 / 下载 / 跳过 / 保存」一起读进标题——标题会进目录名和
    * md 文件名，污染是永久的。所以取标题时克隆一份、把 slot 摘掉再读。
@@ -240,6 +319,9 @@
       ".topic-content",
     ]);
     const { text, images } = root ? walkBody(root) : { text: "", images: [] };
+    /* 正文容器里一张图都没有时，去相册里取（动态页的图全在 _CONFIG / #horizontal-root）。
+     * 小组话题这类正文自带 <img> 的页面 images 非空，完全不受影响。 */
+    if (!images.length) images.push(...albumPhotos());
 
     /* 两种页面的作者位置不同：
      *   小组话题  .topic-doc h3 里同时有组名与作者，只能认 href 含 /people/ 的那个
@@ -380,6 +462,19 @@
     }
     if (failedWrite.length) {
       body += "\n\n> 另有 " + failedWrite.length + " 个文件下载失败：" + RN.writeFailNote(failedWrite) + "。";
+    }
+
+    /* 相册图**不在正文里**：动态页的正文只有一段文字，17 张图全挂在
+     * window._CONFIG.topic.photos 上（由页面 JS 渲染成相册）。
+     * 这些字节照样落盘了，但正文里没有任何占位符可替换——不补这一节，
+     * md 里就一处引用都没有，用户会得到 17 个不知道属于哪篇的孤儿文件。
+     * 只补「没被正文引用过」的那些，图文模板（影评/小组话题）不受影响。 */
+    const used = new Set([...info.body.matchAll(/\u0000(\d+)\u0000/g)].map((m) => Number(m[1])));
+    const orphans = names.map((name, i) => (name && !used.has(i) ? i : -1)).filter((i) => i >= 0);
+    if (orphans.length) {
+      body += "\n\n## 图片\n";
+      for (const i of orphans) body += "\n![" + (i + 1) + "](" + RN.rel(names[i]) + ")";
+      body += "\n";
     }
 
     const md = RN.markdown({

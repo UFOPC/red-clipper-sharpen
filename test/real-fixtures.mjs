@@ -33,7 +33,9 @@ const DOUBAN = {
   day: "2026.10.15",
   tag: "我的旅行日记",
   bodyHead: "这周趁着天气好又去绍兴了",
-  images: 0,
+  /* 相册不在 DOM 里：整组图在 window._CONFIG.topic.photos，17 张（2 张 is_live 实况）。
+   * 这个数字是从快照的 _CONFIG 里数出来的（grep '"image":{' 得 17），别凭印象改。 */
+  images: 17,
 };
 const XCF = {
   author: "小妖凌薇姐",
@@ -53,9 +55,12 @@ const browser = await chromium.launch({ executablePath: BROWSER, headless: true 
 
 /* 一次装好 4 样：chrome mock、样式、命名库、适配器。与 douban-topic.mjs 同一套路。 */
 async function openPage(fixture, url, cssName, jsName) {
+  /* 只剥**外链** script（离线跑不去拉 CDN 上的包），保留内联的——
+   * 豆瓣把相册塞在内联 script 的 window._CONFIG.topic 里，
+   * 一起剥掉就测不到「从 _CONFIG 取图」这条路径了。 */
   const html = fs
     .readFileSync(path.join(EXT, "test/fixtures", fixture), "utf8")
-    .replace(/<script[\s\S]*?<\/script>/gi, "");
+    .replace(/<script\b[^>]*\bsrc=[^>]*>\s*<\/script>/gi, "");
   const page = await browser.newPage();
   await page.addInitScript(() => {
     window.__SENT = [];
@@ -109,6 +114,38 @@ const save = async (page, entry, act) => {
   await page.click(act);
 };
 
+/* 下厨房那组单独成函数：快照可能被清理，缺了就整段跳过。 */
+async function runXcf() {
+  console.log("\n[2] 下厨房 /recipe/<id>/（视频菜谱，无 .steps / .ings）");
+  const xc = await openPage("xiachufang-107357520.html", XCF_URL, "xiachufang.css", "xiachufang.js");
+  check("胶囊出现（没有 .steps 也照样注入）", (await xc.locator(".xcf-xhx-entry").count()) === 1);
+
+  await xc.hover(".xcf-xhx-slot");
+  await xc.waitForSelector(".xcf-xhx-panel", { state: "visible", timeout: 5000 });
+  const xcCnt = ((await xc.textContent(".xcf-xhx-panel .cnt")) || "").trim();
+  check(`面板计数为「${XCF.images} 张」（实际「${xcCnt}」）`, xcCnt === `${XCF.images} 张`);
+
+  await save(xc, ".xcf-xhx-entry", ".xcf-xhx-act");
+  const xcOut = await mdOf(xc);
+  if (!xcOut.md) throw new Error("视频菜谱页没有产出 markdown");
+  const xcText = xcOut.md.text;
+
+  check("md 里有简介", xcText.includes("不用放冰箱"));
+  check(`作者取自 .author a（实际「${(/^作者: (.*)$/m.exec(xcText) || [])[1]}」）`,
+    new RegExp(`^作者: ${XCF.author}$`, "m").test(xcText));
+  check(`时间取自 .time（文件名「${xcOut.md.filename}」）`, xcOut.md.filename.includes(XCF.day));
+  check(`md 里写明这是视频菜谱并留了原页地址（含 ${XCF.vod}）`,
+    xcText.includes("## 视频") && xcText.includes(XCF.vod));
+  check(`封面下发 1 张（实际 ${xcOut.media.length}）`, xcOut.media.length === XCF.images);
+  /* 缩略指令必须剥掉：留着 imageView2/2/w/660 存下来的是 660 宽的缩图。 */
+  check(
+    `封面 url 已剥掉 imageView2（实际「${(xcOut.media[0] || {}).url}」）`,
+    !!xcOut.media[0] && xcOut.media[0].url.includes(XCF.cover) && !/imageView2/.test(xcOut.media[0].url)
+  );
+  check("md 里没有「未识别」这类占位", !xcText.includes("未识别"));
+  await xc.close();
+}
+
 try {
   /* ---------------- 豆瓣：个人动态页 ---------------- */
   console.log("\n[1] 豆瓣 /topic/<id>/（个人动态页，h1 空壳）");
@@ -145,39 +182,30 @@ try {
     dbTitle.startsWith(DOUBAN.bodyHead) && dbTitle.length <= 24);
   check("没有标题时不会退化成「未识别」空 md", !/^来源: 豆瓣$/m.test(dbText) || dbTitle.length > 0);
   check("正文里没有夹进评论区内容", !dbText.includes("回复"));
-  check(`媒体数 ${dbOut.media.length} == 正文里的图片数（这篇是纯文字动态）`,
-    dbOut.media.length === DOUBAN.images && !/!\[1\]\(/.test(dbText));
+  /* 相册图在 _CONFIG 里，DOM 里没有 <img>：这条守的是「从内联 script 取图」那条路径。 */
+  const dbRefs = [...dbText.matchAll(/!\[(\d+)\]\(/g)];
+  check(`相册 ${DOUBAN.images} 张全部转成 md 引用（实际 ${dbRefs.length} 处）`,
+    dbRefs.length === DOUBAN.images);
+  check(`下发媒体数 == 引用数（实际 ${dbOut.media.length} / ${dbRefs.length}）`,
+    dbOut.media.length === DOUBAN.images && dbRefs.length === dbOut.media.length);
+  /* 字节走后台 fetchMedia（doubanio 认 Referer），所以 url 会是 data: 而不是原地址；
+   * 这里验的是「17 张都过了那条通道」且文件名不重复（重复会让覆盖静默吃掉一张）。 */
+  check("17 张都走 fetchMedia 转成 data:image/",
+    dbOut.media.length > 0 && dbOut.media.every((f) => String(f.url).startsWith("data:image/")));
+  check("17 个文件名互不重复",
+    new Set(dbOut.media.map((f) => f.filename)).size === dbOut.media.length);
   await db.close();
 
   /* ---------------- 下厨房：视频菜谱 ---------------- */
-  console.log("\n[2] 下厨房 /recipe/<id>/（视频菜谱，无 .steps / .ings）");
-  const xc = await openPage("xiachufang-107357520.html", XCF_URL, "xiachufang.css", "xiachufang.js");
-  check("胶囊出现（没有 .steps 也照样注入）", (await xc.locator(".xcf-xhx-entry").count()) === 1);
-
-  await xc.hover(".xcf-xhx-slot");
-  await xc.waitForSelector(".xcf-xhx-panel", { state: "visible", timeout: 5000 });
-  const xcCnt = ((await xc.textContent(".xcf-xhx-panel .cnt")) || "").trim();
-  check(`面板计数为「${XCF.images} 张」（实际「${xcCnt}」）`, xcCnt === `${XCF.images} 张`);
-
-  await save(xc, ".xcf-xhx-entry", ".xcf-xhx-act");
-  const xcOut = await mdOf(xc);
-  if (!xcOut.md) throw new Error("视频菜谱页没有产出 markdown");
-  const xcText = xcOut.md.text;
-
-  check("md 里有简介", xcText.includes("不用放冰箱"));
-  check(`作者取自 .author a（实际「${(/^作者: (.*)$/m.exec(xcText) || [])[1]}」）`,
-    new RegExp(`^作者: ${XCF.author}$`, "m").test(xcText));
-  check(`时间取自 .time（文件名「${xcOut.md.filename}」）`, xcOut.md.filename.includes(XCF.day));
-  check(`md 里写明这是视频菜谱并留了原页地址（含 ${XCF.vod}）`,
-    xcText.includes("## 视频") && xcText.includes(XCF.vod));
-  check(`封面下发 1 张（实际 ${xcOut.media.length}）`, xcOut.media.length === XCF.images);
-  /* 缩略指令必须剥掉：留着 imageView2/2/w/660 存下来的是 660 宽的缩图。 */
-  check(
-    `封面 url 已剥掉 imageView2（实际「${(xcOut.media[0] || {}).url}」）`,
-    !!xcOut.media[0] && xcOut.media[0].url.includes(XCF.cover) && !/imageView2/.test(xcOut.media[0].url)
-  );
-  check("md 里没有「未识别」这类占位", !xcText.includes("未识别"));
-  await xc.close();
+  /* 快照可能被清理掉（test/fixtures 不入库）。缺了就跳过，不要让整个用例红：
+   * 这条守的是「视频菜谱没有 .steps 也能存」，用户已实测通过，
+   * 但快照在才能守住回归。重新 Ctrl+S 存回同名文件即可自动恢复。 */
+  const xcfFixture = path.join(EXT, "test/fixtures", "xiachufang-107357520.html");
+  if (!fs.existsSync(xcfFixture)) {
+    console.log("\n[2] 下厨房：快照缺失，跳过（存回 test/fixtures/xiachufang-107357520.html 即恢复）");
+  } else {
+    await runXcf();
+  }
 } catch (e) {
   console.error("✗ " + String((e && e.message) || e).split("\n")[0]);
   fails.push("异常中断");
