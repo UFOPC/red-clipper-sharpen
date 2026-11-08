@@ -455,21 +455,36 @@
 
     const act = panel.querySelector(".db-xhx-act");
     act.addEventListener("click", async () => {
-      const info = readInfo();
-      if (!info || act.disabled) return;
-      act.disabled = true;
+      /* 第一条语句就得可见：先把文案从「保存」挪走，再说认不认得出正文。
+       * 曾经是 `const info = readInfo(); if (!info) return;`——读不出来、或者
+       * readInfo 本身抛异常（未捕获的 rejection），界面上都是「点了完全没反应」，
+       * 分不清是没点到、没认出、还是坏了。现在「…」证明点击生效过，
+       * 之后必然停在「未识别 / 失败 / N/M」三者之一。 */
+      if (act.disabled) return;
       const label = act.textContent;
       const withMedia = media;
       /* md 未落盘时文案要停留久一点，900ms 眨眼就没；成功路径仍是 900ms，逐字不变。 */
       let hold = 900;
+      act.disabled = true;
+      act.textContent = "…";
+      /* 扩展重新加载过、页面没刷，内容脚本的上下文已经失效：之后每个 sendMessage 都会抛
+       * Extension context invalidated。这种不是「失败」，用户该做的是刷新页面，
+       * 所以在下面 catch 里按错误文本分类成「请刷新」。 */
       try {
         /* 正文没认出来就别往下走：deliver() 会写一份只有 frontmatter 的空 md，
          * 那等于把「没抓到」伪装成「保存成功」。放在 try 里是为了复用下面那条
          * finally 还原路径（还原文案 + 解除 disabled + 收面板），不另起一套定时器。
          * 位置在任何 downloadFiles 之前，一个字节都不会发出去。 */
-        if (info.incomplete) {
+        const info = readInfo();
+        if (!info || info.incomplete) {
           act.textContent = "未识别";
           hold = 4000;
+          /* 控制台留一份可核对的现场：标题有没有、正文容器有没有，这两条决定该补哪个选择器。 */
+          console.warn("[小红虾] 豆瓣没认出这篇", {
+            path: location.pathname,
+            title: !!(info && info.title),
+            body: !!(info && !info.incomplete),
+          });
           return;
         }
         act.textContent = withMedia ? "0/" + info.images.length : "保存中";
@@ -483,7 +498,15 @@
           act.textContent = "已提交";
         }
       } catch (e) {
-        act.textContent = "失败";
+        const msg = String((e && e.message) || e);
+        /* 上下文失效不是这篇抓不动，重试多少次都一样；说清该刷新比说「失败」有用。
+         * 判据用真实异常文本，不预先探 chrome.runtime.id——离线用例里的 chrome 是 mock，
+         * 没有 id 字段，按属性探会把「用例环境」误判成「上下文失效」。 */
+        const stale = /Extension context invalidated|message port closed|Receiving end does not exist/i.test(msg);
+        act.textContent = stale ? "请刷新" : "失败";
+        /* 失败文案也要能看清：900ms 一闪而过，等于又变回「没反应」。 */
+        hold = 4000;
+        console.error("[小红虾] 豆瓣保存失败", e);
       } finally {
         setTimeout(() => {
           act.disabled = false;

@@ -267,14 +267,37 @@
       if (act.disabled) return;
       /* label 要在「可能提前 return」之前取，否则未识别分支引用不到它。 */
       const label = act.textContent;
-      const info = readRecipe();
+      const withMedia = media;
+      /* 先把文案从「保存」挪走：readRecipe() 一旦抛异常（未捕获的 rejection），
+       * 界面就和「根本没点到」长得一样。现在「…」证明点击生效过。 */
+      act.disabled = true;
+      act.textContent = "…";
+      let hold = 900;
+      let info = null;
+      try {
+        info = readRecipe();
+      } catch (e) {
+        act.textContent = "失败";
+        hold = 4000;
+        console.error("[小红虾] 下厨房识别出错", e);
+        setTimeout(() => {
+          act.disabled = false;
+          act.textContent = label;
+          setOpen(false);
+        }, hold);
+        return;
+      }
       /* 拿不到 info 和「按钮已禁用」不是一回事：后者是并发保护，前者是模板没认出来
        * （例如页面根本没有 h1，标题取不到 → readRecipe 返回 null）。
        * 以前两者一起 return，用户点一下毫无反应、以为按钮坏了——这是静默无效。
        * 与豆瓣的 incomplete 一个口径：显示「未识别」，4 秒后走同一条还原路径。 */
       if (!info) {
-        act.disabled = true;
         act.textContent = "未识别";
+        console.warn("[小红虾] 下厨房没认出这篇", {
+          path: location.pathname,
+          title: !!document.querySelector("h1.page-title") || !!document.querySelector("h1"),
+          steps: !!document.querySelector(".steps"),
+        });
         setTimeout(() => {
           act.disabled = false;
           act.textContent = label;
@@ -282,10 +305,7 @@
         }, 4000);
         return;
       }
-      act.disabled = true;
-      const withMedia = media;
       /* md 未落盘时文案要停留久一点，900ms 眨眼就没；成功路径仍是 900ms，逐字不变。 */
-      let hold = 900;
       try {
         act.textContent = withMedia ? "0/" + info.images.length : "保存中";
         const result = await deliver(info, (d, t) => {
@@ -298,7 +318,13 @@
           act.textContent = "已提交";
         }
       } catch (e) {
-        act.textContent = "失败";
+        const msg = String((e && e.message) || e);
+        /* 上下文失效重试无意义，说「请刷新」比说「失败」有用；判据用真实异常文本。 */
+        const stale = /Extension context invalidated|message port closed|Receiving end does not exist/i.test(msg);
+        act.textContent = stale ? "请刷新" : "失败";
+        /* 失败文案也要能看清：900ms 一闪而过，等于又变回「没反应」。 */
+        hold = 4000;
+        console.error("[小红虾] 下厨房保存失败", e);
       } finally {
         setTimeout(() => {
           act.disabled = false;

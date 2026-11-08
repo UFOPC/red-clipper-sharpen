@@ -234,6 +234,55 @@ try {
   check(`文件名正常（实际「${topMd.filename}」）`, /小组话题离线用例标题/.test(topMd.filename) && !/剪藏/.test(topMd.filename));
   await top.close();
 
+  /* ---------- 反向 C：标题取不到（readTopic 返回 null）----------
+   * 这是真实页面上最可能的形态：新模板里没有 h1，胶囊靠 .main-hd 兜底挂上了，
+   * 而 readTopic 因为取不到标题返回 null。旧实现在这里直接 return——
+   * 界面上就是「有胶囊、点了一点反应都没有」。 */
+  console.log("\n[6] 反向：没有 h1（读不出标题）→ 未识别，且零下发");
+  const noTitle = await openPage(
+    TOPIC_TOP_URL,
+    buildTopic().replace(`<h1>${TITLE}</h1>`, "") + '<div class="main-hd"></div>'
+  );
+  await noTitle.waitForSelector(".db-xhx-entry", { timeout: 10000 });
+  await noTitle.hover(".db-xhx-slot");
+  await noTitle.waitForSelector(".db-xhx-panel", { state: "visible", timeout: 5000 });
+  await noTitle.click(".db-xhx-act");
+  await noTitle
+    .waitForFunction(() => (document.querySelector(".db-xhx-act") || {}).textContent === "未识别", null, { timeout: 5000 })
+    .catch(() => {});
+  const ntText = ((await noTitle.textContent(".db-xhx-act")) || "").trim();
+  check(`按钮文案变成「未识别」（实际「${ntText}」）`, ntText === "未识别");
+  const ntSent = await sentOf(noTitle);
+  check(`零下发 downloadFiles（实际 ${ntSent.filter((m) => m.type === "downloadFiles").length} 条）`,
+    ntSent.filter((m) => m.type === "downloadFiles").length === 0);
+  await noTitle.close();
+
+  /* ---------- 反向 D：装配期抛异常 ----------
+   * 点击后任何一步抛错，都必须变成看得见的「失败」，而且停够时间。
+   * 旧实现把 readInfo/deliver 裸放在 async 回调里，异常 = 未捕获的 rejection，
+   * 界面一个字都不变，跟「没点到」完全无法区分。 */
+  console.log("\n[7] 反向：装配抛异常 → 失败，且文案停留够久");
+  const boom = await openPage(TOPIC_URL, buildTopic());
+  await boom.waitForSelector(".db-xhx-entry", { timeout: 10000 });
+  await boom.evaluate(() => {
+    window.__RN.markdown = () => {
+      throw new Error("boom");
+    };
+  });
+  await boom.hover(".db-xhx-slot");
+  await boom.waitForSelector(".db-xhx-panel", { state: "visible", timeout: 5000 });
+  await boom.click(".db-xhx-act");
+  await boom
+    .waitForFunction(() => (document.querySelector(".db-xhx-act") || {}).textContent === "失败", null, { timeout: 5000 })
+    .catch(() => {});
+  const boomText = ((await boom.textContent(".db-xhx-act")) || "").trim();
+  check(`按钮文案变成「失败」（实际「${boomText}」）`, boomText === "失败");
+  /* 900ms 的停留肉眼抓不住，等于又变回「没反应」；确认至少 1.2s 还在。 */
+  await boom.waitForTimeout(1200);
+  const boomLater = ((await boom.textContent(".db-xhx-act")) || "").trim();
+  check(`1.2s 后仍显示「失败」（实际「${boomLater}」）`, boomLater === "失败");
+  await boom.close();
+
   await page.close();
   await home.close();
 } catch (e) {
