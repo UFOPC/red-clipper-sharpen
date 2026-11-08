@@ -313,12 +313,15 @@
     const anchor = findAnchor();
     if (!anchor) return;
     ensureUI();
-    /* 插到标题之后，而不是塞进标题里，也不是挂到它的父容器上：
-     *   进 h1  → h1.textContent 会把面板文案带进标题（豆瓣踩过这个坑）；
-     *   进父容器 → 那是约 7400px 高的包裹层，胶囊直接跑到页面底部。
-     * afterend 之后 slot.parentElement 是 h1 的父容器而非 h1，所以这里用
-     * 前一个兄弟节点判重，否则「父节点不是 anchor」永远成立、每 1.5s 重插一次。 */
-    if (slot.previousElementSibling !== anchor) anchor.insertAdjacentElement("afterend", slot);
+    /* 标题 → 插到它后面；退到 .recipe-show（无 h1 的页面）→ 插到块开头。
+     * 同一个 afterend 用在这里会把胶囊落到整个正文块之后，等于换条路径重犯老 bug。
+     * 另外 afterend 之后 slot.parentElement 是 h1 的父容器而非 h1，
+     * 所以标题那条用前一个兄弟节点判重，否则每 1.5s 重插一次。 */
+    if (/^h[1-6]$/i.test(anchor.tagName)) {
+      if (slot.previousElementSibling !== anchor) anchor.insertAdjacentElement("afterend", slot);
+    } else if (anchor.firstElementChild !== slot) {
+      anchor.insertAdjacentElement("afterbegin", slot);
+    }
   }
 
   document.addEventListener("click", (e) => {

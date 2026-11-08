@@ -33,8 +33,12 @@ const browser = await chromium.launch({
     process.env.PW_EXE || "C:/Users/China/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe",
   headless: true,
 });
-let failed = true;
-try {
+/* 打开快照页并注入适配层。
+ * noHeadingTitle=true 时把 h1.page-title 换成一个同文本的 <div>（class 改成 not-a-title），
+ * 模拟「模板里没有 h1」的菜谱页，好走到 findAnchor() 的 .recipe-show 兜底。
+ * 注意**不能只改 class**：findAnchor() 的第二候选是裸 h1，改了 class 仍会被它命中，
+ * 根本到不了 .recipe-show 那条分支，用例会绿得毫无意义。 */
+async function openSnapshot(opts = {}) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await page.addInitScript(() => {
     window.__SENT = [];
@@ -58,10 +62,27 @@ try {
   await page.goto(URL_REAL, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForSelector(".steps li.container", { timeout: 10000 });
 
+  if (opts.noHeadingTitle) {
+    await page.evaluate(() => {
+      const h1 = document.querySelector("h1.page-title");
+      if (!h1) return;
+      const swapped = document.createElement("div");
+      swapped.className = "not-a-title";
+      swapped.textContent = h1.textContent;
+      h1.replaceWith(swapped);
+    });
+  }
+
   await page.addStyleTag({ path: path.join(extDir, "content/xiachufang.css") });
   await page.addScriptTag({ path: path.join(extDir, "js/rn-format.js") });
   await page.addScriptTag({ path: path.join(extDir, "content/xiachufang.js") });
   await page.waitForSelector(".xcf-xhx-entry", { timeout: 10000 });
+  return page;
+}
+
+let failed = true;
+try {
+  const page = await openSnapshot();
 
   /* 胶囊「存在」不等于「看得见」：曾经 appendChild 到 h1 的父容器上，
    * 而那个 div 是整篇文章的包裹层（站方 CSS 下约 7400px 高），
@@ -149,6 +170,35 @@ try {
   console.log(`  用料    ${ingRows - 1} 行 | 做法 ${steps} 步 | 正文 ${md.text.length} 字符`);
   console.log(`  frontmatter:\n${md.text.split("\n---")[0].split("\n").map((l) => "    " + l).join("\n")}`);
   if (process.env.DUMP) console.log("\n===== md 前 40 行 =====\n" + md.text.split("\n").slice(0, 40).join("\n"));
+
+  /* ---------- 兜底分支：没有 h1 的页面 ----------
+   * findAnchor() 退到 .recipe-show 时，若还沿用 afterend，胶囊会落到整个菜谱正文块
+   * 之后——和「掉到页面底部」是同一个形状，只是换了条路径。
+   * 这里要能区分「挂在块开头」和「挂在块末尾」，所以断言 index 与 firstElementChild。 */
+  console.log("\n[2] 兜底：没有 h1 的页面，胶囊挂在 .recipe-show 开头");
+  const noH1 = await openSnapshot({ noHeadingTitle: true });
+  const at = await noH1.evaluate(() => {
+    const show = document.querySelector(".recipe-show");
+    const slot = document.querySelector(".xcf-xhx-slot");
+    const kids = show ? [...show.children] : [];
+    return {
+      hasSlot: !!slot,
+      parentIsShow: !!(show && slot && slot.parentElement === show),
+      isFirst: !!(show && slot && show.firstElementChild === slot),
+      isLast: !!(show && slot && show.lastElementChild === slot),
+      index: slot ? kids.indexOf(slot) : -1,
+      total: kids.length,
+    };
+  });
+  if (!at.hasSlot) throw new Error("无 h1 页面上没有挂出胶囊");
+  if (!at.parentIsShow || !at.isFirst) {
+    throw new Error(
+      `胶囊没挂在 .recipe-show 开头：parentIsShow=${at.parentIsShow} index=${at.index}/${at.total} isLast=${at.isLast}`
+    );
+  }
+  if (at.isLast) throw new Error("胶囊挂在 .recipe-show 末尾，等于换条路径重犯老 bug");
+  console.log(`  兜底    .recipe-show 第 ${at.index + 1}/${at.total} 个子节点（首个）`);
+  await noH1.close();
   failed = false;
 } catch (e) {
   console.error("✗ " + e.message.split("\n")[0]);
