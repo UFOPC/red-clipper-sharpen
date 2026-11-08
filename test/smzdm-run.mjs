@@ -276,7 +276,21 @@ if (extId) {
   const sites = await opt.locator(".sites li strong").allTextContents();
   const codes = await opt.locator(".sites li code").allTextContents();
   const liCount = await opt.locator(".sites li").count();
-  ok(codes.length === liCount && sites.length === liCount, `每条站点都有名称和域名（${liCount} 条）`);
+  /* 一行可以有多个域名（微博同时列 m.weibo.cn 与 weibo.com 两个入口），
+   * 所以只要求「域名数不少于站点数」，不再一一对应。 */
+  ok(
+    codes.length >= liCount && sites.length === liCount,
+    `每条站点都有名称和域名（${liCount} 条，域名 ${codes.length} 个）`
+  );
+
+  /* 总数够不代表每行都有：某行漏写、另一行多写同样能让总数对得上，所以逐行数一遍。 */
+  const codesPerRow = await opt
+    .locator(".sites li")
+    .evaluateAll((list) => list.map((li) => li.querySelectorAll("code").length));
+  const emptyRows = codesPerRow
+    .map((n, i) => (n > 0 ? "" : sites[i] || `第 ${i + 1} 行`))
+    .filter(Boolean);
+  ok(emptyRows.length === 0, `每行至少列一个域名（缺：${emptyRows.join(" / ") || "无"}）`);
 
   const missing = codes.filter((c) => !mHosts.some((h) => sameDomain(c, h)));
   ok(missing.length === 0, `设置页每个域名都在 manifest 里（缺：${missing.join(" / ") || "无"}）`);
