@@ -1,6 +1,6 @@
-/* 豆瓣（影评 / 书评 / 乐评）适配
+/* 豆瓣（影评 / 书评 / 乐评 / 小组话题）适配
  *
- * 结构要点（2026-11 实测 movie.douban.com/review/17890635）：
+ * 结构要点（影评，2026-11 实测 movie.douban.com/review/17890635）：
  *   路径   /review/<id>/，movie / book / music / www 四个子域同一套模板
  *   标题   #content h1 > span
  *   作者   .main-hd a[href*="/people/"]
@@ -8,6 +8,18 @@
  *   对象   .main-hd a[href*="/subject/"]（评的是哪部电影/哪本书），拿去当 tag
  *   正文   .review-content，子节点是 <p> 与 <div class="image-container">
  *   图片   .image-container img，src 直给（没有懒加载属性），落在 img*.doubanio.com
+ *
+ * 小组话题（/group/topic/<id>/）与影评不同，且**这套结构没能在真实页面上核对**：
+ * 小组/社区侧对自动化访问单独下了拦截（2026-11 复测：www 回 403「没有访问权限」，
+ * m.douban.com 回 404；同一时刻 movie.douban.com/review/ 仍能正常打开，
+ * 所以是小组侧拦的，不是全站）。因此下面每个字段都是多候选兜底，
+ * 一处猜一个 class 写死的写法一律不用：
+ *   标题   #content h1 → .topic-doc h1 → h1
+ *   正文   .topic-richtext → .rich-content.topic-richtext → .topic-content .rich-content
+ *          → #link-report .topic-content → .topic-content
+ *   作者   只认 href 含 /people/ 的锚点（h3 里同时有组名，整段取会把组名当作者）
+ *   时间   .create-time 之类的纯文本，靠 parseDateText 解析
+ *   回复   .comment-item 在正文容器之外，walkBody 只走容器子树，天然不带进 md
  *
  * 防盗链：doubanio.com 对「没有 Referer 的请求」回 418（I'm a teapot，0 字节）。
  * 带任意 douban 子域 Referer 就 200（实测 www / movie / book / note 四种都行），
@@ -21,6 +33,7 @@
   if (!RN) return;
 
   const REVIEW_RE = /^\/review\/(\d+)\/?$/;
+  const TOPIC_RE = /^\/group\/topic\/(\d+)\/?$/;
   const SKIP_IMG = /\/(icon|avatar|upfallback)\//i;
   const UA_REFERER = "https://www.douban.com/";
 
@@ -29,6 +42,31 @@
   /* ---------- 取数 ---------- */
 
   const squash = (s) => String(s || "").replace(/\s+/g, " ").trim();
+
+  /* 候选选择器按序试，命中第一个就用，全不中返回 null。
+   * 小组话题的类名没能对着真实页面核过，所以每条字段都给几个候选；
+   * 是否「留空」还是「算失败」由调用方定，这里不做猜测性兜底。 */
+  function pick(list, root) {
+    const scope = root || document;
+    for (const sel of list) {
+      const el = scope.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  /* 小组话题的时间是纯文本（「2024-11-05 21:33:07 来自网页」），没有影评那种
+   * span[content] 属性，所以单独解析，不复用 parseTime()——那个把
+   * .main-meta span[content] 写死在里面了。
+   * 解析不出回落 Date.now()：frontmatter 总要有日期，缺了文件名与排序都会别扭。 */
+  function parseDateText(text) {
+    const m = /(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(squash(text));
+    if (m) {
+      const date = new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+      if (Number.isFinite(date.getTime())) return date.getTime();
+    }
+    return Date.now();
+  }
 
   function parseTime() {
     const el = document.querySelector(".main-meta span[content]");
@@ -56,6 +94,19 @@
     const m = /\.([a-z0-9]{2,5})$/i.exec(path);
     const ext = m ? m[1].toLowerCase() : "jpg";
     return /^(jpe?g|png|gif|webp|avif|bmp|svg)$/.test(ext) ? "." + ext : ".jpg";
+  }
+
+  /* 胶囊是挂进 h1 的子节点，直接读 h1.textContent 会把面板文案
+   * 「剪藏 / 图片 / N 张 / 下载 / 跳过 / 保存」一起读进标题——标题会进目录名和
+   * md 文件名，污染是永久的。所以取标题时克隆一份、把 slot 摘掉再读。
+   * slot 还没建（首次 tick 之前）时 el 不含它，直接读即可。 */
+  function titleText(el) {
+    if (!el) return "";
+    if (!slot || !el.contains(slot)) return squash(el.textContent);
+    const clone = el.cloneNode(true);
+    const junk = clone.querySelector(".db-xhx-slot");
+    if (junk && junk.parentElement) junk.parentElement.removeChild(junk);
+    return squash(clone.textContent);
   }
 
   /* 正文走一趟，图片在原位留 \u0000N\u0000 占位符，保证 md 里图不乱序。
@@ -121,7 +172,7 @@
     if (!m || !root) return null;
 
     const title = squash(document.querySelector("#content h1 span")?.textContent) ||
-      squash(document.querySelector("#content h1")?.textContent);
+      titleText(document.querySelector("#content h1"));
     if (!title) return null;
 
     const nick =
@@ -142,6 +193,71 @@
       images,
       url: location.origin + "/review/" + m[1] + "/",
     };
+  }
+
+  /* 豆瓣小组话题（/group/topic/<id>/）。返回结构与 readReview() 对齐，
+   * 多一个 incomplete 标记，让 UI 能把「结构没认出来」显示出来而不是静默失败。
+   *
+   * 两处与影评的关键差别：
+   *   作者  h3 里同时挂着小组名和作者名，只能认 href 含 /people/ 的那个锚点；
+   *         取不到就留空字符串——空的 nick 走 layout() 的兜底是安全的，
+   *         而拿组名冒充作者会写进文件名和 frontmatter，比空着糟得多。
+   *   正文  取不到容器时**不返回 null**：返回 null 会让点击后什么都不发生，
+   *         用户以为按钮坏了。这里置 incomplete，由 act 回调显示「未识别」。 */
+  function readTopic() {
+    const m = TOPIC_RE.exec(location.pathname);
+    if (!m) return null;
+
+    const title = titleText(pick(["#content h1", ".topic-doc h1", "h1"]));
+    /* 标题都没有说明这页不是话题正文（列表页、登录墙、风控页），不注入，与其它适配器一致。 */
+    if (!title) return null;
+
+    /* 候选按「越像正文越靠前」排，命中即止。最后那条 .topic-content 是纯兜底：
+     * querySelector 取文档序第一个，而话题正文排在回复列表之前，正常版面下命中的是正文；
+     * 但若站方给回复区也用了同名类，这一条有可能抓成某条回复——incomplete 拦不住这种
+     * （抓到的是非空文本），所以它只是兜底，不是等价候选。 */
+    const root = pick([
+      ".topic-richtext",
+      ".rich-content.topic-richtext",
+      ".topic-content .rich-content",
+      "#link-report .topic-content",
+      ".topic-content",
+    ]);
+    const { text, images } = root ? walkBody(root) : { text: "", images: [] };
+
+    const nick = squash(
+      (pick([
+        ".topic-doc h3 a[href*='/people/']",
+        ".topic-doc .from a[href*='/people/']",
+        ".topic-doc a[href*='/people/']",
+      ]) || {}).textContent
+    );
+
+    const subject = squash(
+      (pick([".topic-doc h3 a[href*='/group/']", ".topic-doc h3 .color-green"]) || {}).textContent
+    );
+
+    const timeEl = pick([".topic-doc .create-time", ".topic-doc h3 .create-time", ".topic-time"]);
+
+    return {
+      id: m[1],
+      title,
+      nick,
+      subject,
+      time: parseDateText((timeEl || {}).textContent),
+      body: text,
+      images,
+      url: location.origin + "/group/topic/" + m[1] + "/",
+      /* 正文抓空 = 候选选择器全没命中。标记出去，让保存路径在写盘前拦住。 */
+      incomplete: !text,
+    };
+  }
+
+  /* 同一个 content script 管两种模板，入口统一从这里分流。 */
+  function readInfo() {
+    if (REVIEW_RE.test(location.pathname)) return readReview();
+    if (TOPIC_RE.test(location.pathname)) return readTopic();
+    return null;
   }
 
   /* ---------- 抓取与投递 ---------- */
@@ -269,7 +385,7 @@
 
   function refreshCount() {
     if (!stateEl) return;
-    const info = readReview();
+    const info = readInfo();
     if (!info) return;
     stateEl.textContent = info.images.length + " 张";
   }
@@ -292,7 +408,7 @@
     const entry = document.createElement("button");
     entry.type = "button";
     entry.className = "db-xhx-entry";
-    entry.title = "小红虾 · 保存这篇评论";
+    entry.title = "小红虾 · 保存这篇内容";
     entry.innerHTML = '<img src="' + chrome.runtime.getURL("icons/icon.svg") + '" alt=""><span>剪藏</span>';
 
     panel = document.createElement("div");
@@ -335,7 +451,7 @@
 
     const act = panel.querySelector(".db-xhx-act");
     act.addEventListener("click", async () => {
-      const info = readReview();
+      const info = readInfo();
       if (!info || act.disabled) return;
       act.disabled = true;
       const label = act.textContent;
@@ -343,6 +459,15 @@
       /* md 未落盘时文案要停留久一点，900ms 眨眼就没；成功路径仍是 900ms，逐字不变。 */
       let hold = 900;
       try {
+        /* 正文没认出来就别往下走：deliver() 会写一份只有 frontmatter 的空 md，
+         * 那等于把「没抓到」伪装成「保存成功」。放在 try 里是为了复用下面那条
+         * finally 还原路径（还原文案 + 解除 disabled + 收面板），不另起一套定时器。
+         * 位置在任何 downloadFiles 之前，一个字节都不会发出去。 */
+        if (info.incomplete) {
+          act.textContent = "未识别";
+          hold = 4000;
+          return;
+        }
         act.textContent = withMedia ? "0/" + info.images.length : "保存中";
         const result = await deliver(info, (d, t) => {
           act.textContent = d + "/" + t;
@@ -369,15 +494,17 @@
     setTimeout(refreshCount, 2500);
   }
 
-  /* 挂到标题行：豆瓣 h1 只有一行标题，胶囊跟在标题后面最不打眼。 */
+  /* 挂到标题行：豆瓣 h1 只有一行标题，胶囊跟在标题后面最不打眼。
+   * 小组话题的 h1 有时在 .topic-doc 里，两种都试。 */
   function findAnchor() {
-    const h1 = document.querySelector("#content h1");
+    const h1 = pick(["#content h1", ".topic-doc h1"]);
     if (h1) return h1;
     return document.querySelector(".main-hd");
   }
 
   function tick() {
-    if (!REVIEW_RE.test(location.pathname)) {
+    /* 影评与小组话题共用这一套 UI；都不命中（小组首页 / 列表页等）才摘掉胶囊。 */
+    if (!REVIEW_RE.test(location.pathname) && !TOPIC_RE.test(location.pathname)) {
       if (slot && slot.parentElement) slot.parentElement.removeChild(slot);
       return;
     }
