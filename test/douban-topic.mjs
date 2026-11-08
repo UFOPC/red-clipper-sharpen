@@ -8,13 +8,19 @@
  * **它证明的是「候选选择器至少有一条能命中这套建模结构」，不证明真实页面就是这几个类名**。
  * 真实结构的兜底靠的是多候选 + 认不出时显示「未识别」，不是靠这个用例。
  *
- * 守四件事：
+ * 守七件事：
  *   ① 路径守卫放宽后，小组话题页出现胶囊，且图片计数正确（2 张）
  *   ② md 装配：来源/作者/tags 正确、引用数 == 下发媒体数、媒体都是 data:image/、
  *      正文里不含页面下方的回复（.comment-item 里的标记串）
  *   ③ 正文容器认不出时：按钮显示「未识别」，且**一个 downloadFiles 都不发**
  *      （不能把「没抓到」写成只有 frontmatter 的空 md）
  *   ④ 小组首页（/group/<id>/）不注入胶囊
+ *   ⑤ 顶层 /topic/<id>/ 也注入，且 frontmatter 的链接保留 /topic/ 形态
+ *   ⑥ 标题与正文都取不到 → 「未识别」+ 零下发（旧实现在这里静默 return）
+ *   ⑦ 装配期抛异常 → 「失败」且文案停留 ≥1.2s（旧实现只停 900ms，等于没显示）
+ *
+ * 真实页面模板（个人动态页 / 视频菜谱）由 test/real-fixtures.mjs 用快照守，
+ * 这个文件只证明候选选择器对建模结构成立。
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -234,14 +240,14 @@ try {
   check(`文件名正常（实际「${topMd.filename}」）`, /小组话题离线用例标题/.test(topMd.filename) && !/剪藏/.test(topMd.filename));
   await top.close();
 
-  /* ---------- 反向 C：标题取不到（readTopic 返回 null）----------
-   * 这是真实页面上最可能的形态：新模板里没有 h1，胶囊靠 .main-hd 兜底挂上了，
-   * 而 readTopic 因为取不到标题返回 null。旧实现在这里直接 return——
-   * 界面上就是「有胶囊、点了一点反应都没有」。 */
-  console.log("\n[6] 反向：没有 h1（读不出标题）→ 未识别，且零下发");
+  /* ---------- 反向 C：标题与正文都取不到 ----------
+   * 2026-11 起「没有 h1」不再等于失败：动态页的 h1.topic-title 是空壳，
+   * 标题由正文首句兜底（见 [8]）。所以这条反向必须把**正文容器也打掉**，
+   * 才是真正的「这页不是正文页」。 */
+  console.log("\n[6] 反向：无标题 + 正文容器认不出 → 未识别，且零下发");
   const noTitle = await openPage(
     TOPIC_TOP_URL,
-    buildTopic().replace(`<h1>${TITLE}</h1>`, "") + '<div class="main-hd"></div>'
+    buildTopic("xxx-unknown").replace(`<h1>${TITLE}</h1>`, "") + '<div class="main-hd"></div>'
   );
   await noTitle.waitForSelector(".db-xhx-entry", { timeout: 10000 });
   await noTitle.hover(".db-xhx-slot");

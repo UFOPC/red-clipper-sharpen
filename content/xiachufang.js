@@ -9,6 +9,15 @@
  *   做法   .steps ol > li.container > p.text + img（有的步骤只有文字）
  *   成品图 .recipe-show > .cover img（同块里还有一堆「别人做的」作品图，一律不要）
  *
+ * 视频菜谱是**另一套模板**（实测 /recipe/107357520/?recipe_type=1&page_scene=6，
+ * 标题尾巴带「的做法视频_做法步骤」）：
+ *   iframe.recipe-vod-video   正文主体，src 指向 /vod_video/<n>/
+ *   .recipe-show > .cover     同图文模板
+ *   .author / .desc / .time   同图文模板
+ *   **没有 .steps，也没有 .ings**（用料与步骤都在视频里）
+ * 所以 .steps 不能当页面有效的前提，否则这类页面全部「未识别」。
+ * 视频不下，只在 md 里留一行回原页的地址。
+ *
  * 图片：i2.chuimg.com 的 src 带 ?imageView2/2/w/300/... 缩略指令，剥掉才拿到作者上传的原图
  * （实测 38KB → 68KB）。这个 CDN 对裸请求直接 200，不需要补 Referer，
  * 所以这里不下字节、直接把 URL 交给下载器，与其它三站的防盗链路径不同。
@@ -48,8 +57,12 @@
 
   function readRecipe() {
     const m = RECIPE_RE.exec(location.pathname);
-    const stepsRoot = document.querySelector(".steps");
-    if (!m || !stepsRoot) return null;
+    if (!m) return null;
+    /* 注意：这里**不能**再把 .steps 当成页面有效的前提。
+     * 视频菜谱（/recipe/<id>/?recipe_type=1…）没有 .steps、也没有 .ings，
+     * 主体是一段 iframe.recipe-vod-video + 封面 + 简介；
+     * 早期写法是 `if (!stepsRoot) return null`，这类页面一律显示「未识别」，
+     * 用户看到的是「有胶囊、点了没反应」。判据只留「标题能不能取到」。 */
 
     const title = squash(document.querySelector("h1.page-title")?.textContent) || squash(document.querySelector("h1")?.textContent);
     if (!title) return null;
@@ -98,6 +111,15 @@
       parts.push("");
     }
     if (stepLines.length) parts.push("## 做法", "", stepLines.join("\n\n"), "");
+    /* 视频菜谱：正文主体是一段 iframe（/vod_video/<n>/），没有步骤文本。
+     * 视频本身不下（要登录、且是流），只留一行能点回原页的地址，
+     * 让 md 里明确写着「这篇的正文是视频」，而不是看起来像抓漏了。 */
+    const videoEl = document.querySelector("iframe.recipe-vod-video");
+    const videoSrc = videoEl ? String(videoEl.getAttribute("src") || "").trim() : "";
+    if (videoSrc) {
+      const abs = /^https?:/i.test(videoSrc) ? videoSrc : "https://www.xiachufang.com" + (videoSrc.startsWith("/") ? "" : "/") + videoSrc;
+      parts.push("## 视频", "", `视频菜谱，原视频见 <${abs}>（本站视频不下，点回原页观看）`, "");
+    }
 
     /* 小贴士不是每个菜谱都有。先定位「小贴士」这个小标题，再取它父容器的文字；
      * 不要直接扫 div 找含「小贴士」的大容器——那会把整页正文都当成提示。 */
@@ -108,17 +130,22 @@
       if (tip && tip.length < 800) parts.push("## 小贴士", "", tip, "");
     }
 
+    const body = parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     return {
       id: m[1],
       title,
       nick,
       time,
-      body: parts.join("\n").replace(/\n{3,}/g, "\n\n").trim(),
+      body,
       images,
       ings: ings.length,
       steps: stepNo,
+      /* 有标题但正文一个字都没拼出来（简介/封面/用料/步骤全缺）= 结构没认出来，
+       * 交给 act 显示「未识别」，不要写一份只有 frontmatter 的空 md。 */
+      incomplete: !body,
       url: `https://www.xiachufang.com/recipe/${m[1]}/`,
     };
+
   }
 
   async function deliver(info, onProgress, options = {}) {
@@ -291,7 +318,7 @@
        * （例如页面根本没有 h1，标题取不到 → readRecipe 返回 null）。
        * 以前两者一起 return，用户点一下毫无反应、以为按钮坏了——这是静默无效。
        * 与豆瓣的 incomplete 一个口径：显示「未识别」，4 秒后走同一条还原路径。 */
-      if (!info) {
+      if (!info || info.incomplete) {
         act.textContent = "未识别";
         console.warn("[小红虾] 下厨房没认出这篇", {
           path: location.pathname,

@@ -57,6 +57,19 @@
     return null;
   }
 
+  /* 取「第一个真的有文字」的节点。与 pick 的区别是**跳过空节点**：
+   * 豆瓣动态页的 <h1 class="topic-title"></h1> 存在但一个字符都没有，
+   * querySelector 命中它就等于整页判成无标题/无作者，而界面上胶囊照旧挂着。 */
+  function firstText(list, root) {
+    const scope = root || document;
+    for (const sel of list) {
+      for (const el of scope.querySelectorAll(sel)) {
+        if (squash(el.textContent)) return el;
+      }
+    }
+    return null;
+  }
+
   /* 小组话题的时间是纯文本（「2024-11-05 21:33:07 来自网页」），没有影评那种
    * span[content] 属性，所以单独解析，不复用 parseTime()——那个把
    * .main-meta span[content] 写死在里面了。
@@ -210,9 +223,10 @@
     const m = TOPIC_RE.exec(location.pathname);
     if (!m) return null;
 
-    const title = titleText(pick(["#content h1", ".topic-doc h1", "h1"]));
-    /* 标题都没有说明这页不是话题正文（列表页、登录墙、风控页），不注入，与其它适配器一致。 */
-    if (!title) return null;
+    /* 标题：找第一个**真的有字**的节点。豆瓣动态页里 `<h1 class="topic-title"></h1>`
+     * 是个空壳（2026-11 实测 /topic/502558660/），querySelector 命中它就等于把整页
+     * 判成「没有标题」——胶囊照样挂上去了，点下去只会显示「未识别」。 */
+    const title = titleText(firstText([".topic-title", "#content h1", ".topic-doc h1", "h1"]));
 
     /* 候选按「越像正文越靠前」排，命中即止。最后那条 .topic-content 是纯兜底：
      * querySelector 取文档序第一个，而话题正文排在回复列表之前，正常版面下命中的是正文；
@@ -227,23 +241,46 @@
     ]);
     const { text, images } = root ? walkBody(root) : { text: "", images: [] };
 
+    /* 两种页面的作者位置不同：
+     *   小组话题  .topic-doc h3 里同时有组名与作者，只能认 href 含 /people/ 的那个
+     *   个人动态  .article-meta 里的 a.author-name（.user-face 那个只有头像，没有文字） */
     const nick = squash(
-      (pick([
+      (firstText([
+        ".article-meta .author-name",
         ".topic-doc h3 a[href*='/people/']",
+        ".article-meta a[href*='/people/']",
+        ".user-face a[href*='/people/']",
         ".topic-doc .from a[href*='/people/']",
         ".topic-doc a[href*='/people/']",
       ]) || {}).textContent
     );
 
+    /* 小组名当 tag；个人动态没有组名，退到 .gallery 里的话题名（实测「我的旅行日记」）。 */
     const subject = squash(
-      (pick([".topic-doc h3 a[href*='/group/']", ".topic-doc h3 .color-green"]) || {}).textContent
+      (firstText([
+        ".topic-doc h3 a[href*='/group/']",
+        ".topic-doc h3 .color-green",
+        ".gallery a",
+      ]) || {}).textContent
     );
 
-    const timeEl = pick([".topic-doc .create-time", ".topic-doc h3 .create-time", ".topic-time"]);
+    const timeEl = firstText([
+      ".topic-meta .create-time",
+      ".create-time",
+      ".topic-time",
+      ".topic-doc .create-time",
+    ]);
+
+    /* 动态页确实没有标题，不能因此判成「不是正文页」：
+     * 用正文首句前 24 字（与微博单条同一口径），再兜底 <作者>_动态_<id>。
+     * 只有标题与正文**都**取不到，才算这页不是正文（列表页 / 登录墙 / 风控页）。 */
+    const derived = title || squash(text.split("\n")[0]).replace(/[#＃]/g, "").slice(0, 24);
+    /* 标题与正文都取不到，才是真不是正文页（列表页 / 登录墙 / 风控页），不注入。 */
+    if (!derived) return null;
 
     return {
       id: m[1],
-      title,
+      title: derived || `${nick || "豆瓣"}_动态_${m[1]}`,
       nick,
       subject,
       time: parseDateText((timeEl || {}).textContent),
@@ -522,11 +559,13 @@
   }
 
   /* 挂到标题行：豆瓣 h1 只有一行标题，胶囊跟在标题后面最不打眼。
-   * 小组话题的 h1 有时在 .topic-doc 里，两种都试。 */
+   * 但 h1 必须是**有字**的那个——动态页的 .topic-title 是空壳，
+   * 挂进空 h1 时胶囊会悬在标题空白处，和下面的作者/正文完全脱节。
+   * 空标题时退到作者行（.article-meta），再退到内容块开头。 */
   function findAnchor() {
-    const h1 = pick(["#content h1", ".topic-doc h1"]);
+    const h1 = firstText(["#content h1", ".topic-doc h1", "h1"]);
     if (h1) return h1;
-    return document.querySelector(".main-hd");
+    return pick([".article-meta", "#topic-content", ".personal-topic", ".main-hd"]);
   }
 
   function tick() {
