@@ -38,18 +38,22 @@ This extension does exactly one thing: **click once on the page, and get a folde
 | PCbeta | `bbs.pcbeta.com` | Thread body and all images | Same Discuz engine as Chiphell — no extra JS |
 | Enshan | `right.com.cn` | Thread body and all images | Same engine as above; the site runs slider captcha, so scripted runs hit a challenge |
 | Erji | `erji.net` | Thread body, images, replies | Threads are not statically cached; served via `forum.php?mod=viewthread` |
-| Douban | `douban.com` | Long-form movie / book / music reviews, group topics, with images | Review markup is verified; group pages answer 403 to automated requests, so their class names are matched through a candidate list — when the body cannot be found the button reports "unrecognised" and nothing is written. Images live on `doubanio.com` and return 418 to bare requests; the worker attaches a Referer and fetches the bytes |
+| Douban | `douban.com` | Long-form movie / book / music reviews, group topics, personal timelines, with images | Reviews and timelines are verified; group pages answer 403 to automated requests, so their class names are matched through a candidate list — when the body cannot be found the button reports "unrecognised" and nothing is written. Images live on `doubanio.com` and return 418 to bare requests; the worker attaches a Referer and fetches the bytes. On timelines `h1.topic-title` is an empty shell, so the title falls back to the first 24 characters of the body; the album images are not in the DOM at all (they hang off `window._CONFIG.topic.photos` and are rendered by page JS), so they are read from the inline config instead, and a trailing "## 图片" section lists every image the body never referenced — the reference count always equals the number of files written |
 | SSPAI | `sspai.com` | Article body, images, comments | Direct image requests return 403; bytes are fetched by the content script |
 | SMZDM | `post.smzdm.com` | Article body, images, in-page video, comments | Only `/p/` article pages; image `.jpg` suffixes are unreliable, MIME must be restored |
 | WeChat public accounts | `mp.weixin.qq.com` | Article body and images | The self-use build can switch its output layout to match Wechat-Sharpen; the release build always uses the generic tree |
 | Weibo | `m.weibo.cn` | Single image-text or gallery post, upgraded to `/large/` originals | Only `/status/<id>` and `/detail/<id>`; video posters do not count as images, and videos are not downloaded |
 | Xiachufang | `xiachufang.com` | Recipe intro, ingredient table, step images, finished-dish images | Strips the `?imageView2/…` thumbnail instruction to get the original; the CDN answers bare requests with 200, no Referer needed |
 
+> The desktop Weibo adapter (`weibo.com/detail/<mid>`) is wired into the manifest, but its API fields are built
+> entirely from the public endpoints and **have never been checked under a logged-in session**, so it is left
+> out of the table for now.
+
 ## Installation
 
 **From a Release**
 
-1. Download the latest `小红虾-<version>.zip` and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned). A `小红虾-self-<version>.zip` build also exists: identical, except that WeChat public-account posts default to the Wechat-Sharpen layout and the options page keeps a layout switch for them
+1. Download the latest `XHX-<version>.zip` (XHX is short for Xiao Hong Xia) and extract it to a permanent folder (not the Desktop — it disappears when the Desktop is cleaned). An `XHX-self-<version>.zip` build also exists: identical, except that WeChat public-account posts default to the Wechat-Sharpen layout and the options page keeps a layout switch for them
 2. Open `chrome://extensions` (or `edge://extensions` on Edge)
 3. Turn on "Developer mode" in the top-right corner
 4. Click "Load unpacked" and select the extracted folder
@@ -185,7 +189,7 @@ The switch writes `layout` into `chrome.storage.local`; the content script reads
 ## Project structure
 
 ```
-manifest.json          MV3 manifest: eight content scripts (eleven sites) + one service worker
+manifest.json          MV3 manifest: nine content scripts (eleven sites) + one service worker
 js/
   background.js        message routing, IndexedDB staging, Xiaohongshu fetching and assembly
   rn-format.js         naming / frontmatter / text-image layout / quality tiers, shared by all sites
@@ -193,11 +197,12 @@ js/
 content/
   index.js|css         Xiaohongshu: capsule, panel, comment expansion, progress, quality, original video
   discuz.js|css        Discuz! X engine (Chiphell / PCbeta / Enshan / Erji): author mode, paging, attachment grid
-  douban.js|css        Douban: reviews and group topics, with Referer-guarded image bytes
+  douban.js|css        Douban: reviews, group topics and timelines, with Referer-guarded image bytes
   sspai.js|css         SSPAI: includes hotlink-protection handling
   smzdm.js|css         SMZDM: includes MIME restoration and video decryption
   wechat.js            WeChat public accounts: Wechat-Sharpen-compatible output layout
   weibo.js|css         Weibo: single post, images upgraded to `/large/`
+  weibo-desktop.js     Weibo desktop: experimental, API not verified under a login
   xiachufang.js|css    Xiachufang: recipe parsing, thumbnail-instruction stripping
   format-size.js       size formatting (base 1000, no library)
 setting.html           options page

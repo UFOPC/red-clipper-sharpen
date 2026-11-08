@@ -1,6 +1,7 @@
 # 小红虾 · 下载助手
 
-> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、论坛帖子、豆瓣影评与小组话题、少数派文章、什么值得买文章，
+> 一个 Chrome / Edge 扩展（Manifest V3）：把小红书笔记、Discuz 论坛帖子（Chiphell / 远景 / 恩山 / 耳机大家坛）、
+> 豆瓣影评与小组话题、少数派文章、什么值得买文章、微信公众号文章、单条微博、下厨房菜谱，
 > 连同图片、视频、评论，存成一份带 YAML frontmatter 的 Markdown + 分类媒体目录。
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
@@ -33,7 +34,7 @@
 | 远景论坛 | `bbs.pcbeta.com` | 论坛帖子正文与全部图片 | 与 Chiphell 共用一套 Discuz 引擎，零新增 JS |
 | 恩山无线 | `right.com.cn` | 论坛帖子正文与全部图片 | 同上；站方有滑块风控，脚本化跑会撞验证码 |
 | 耳机大家坛 | `erji.net` | 论坛帖子正文、图片、回复 | 帖子不静态化，走 `forum.php?mod=viewthread` |
-| 豆瓣 | `douban.com` | 影评 / 书评 / 乐评长文、小组话题，及配图 | 影评结构已实测；小组页对自动化回 403，类名按多候选兜底，认不出正文时按钮报「未识别」且一个文件都不写。图片在 `doubanio.com`，裸请求回 418，后台补 Referer 后取字节 |
+| 豆瓣 | `douban.com` | 影评 / 书评 / 乐评长文、小组话题、个人动态，及配图 | 影评与个人动态已实测；小组页对自动化回 403，类名按多候选兜底，认不出正文时按钮报「未识别」且一个文件都不写。图片在 `doubanio.com`，裸请求回 418，后台补 Referer 后取字节。动态页的 `h1.topic-title` 是空壳，标题退回正文首句前 24 字；整组相册图不在 DOM 里（挂在 `window._CONFIG.topic.photos`，由页面 JS 渲染），改为读内联脚本里的配置取全，md 末尾补「## 图片」把没被正文引用的图按原序列出，保证引用数 == 落盘数 |
 | 少数派 | `sspai.com` | 文章正文、图片、评论 | 图片直连 403，走内容脚本取字节 |
 | 什么值得买 | `post.smzdm.com` | 文章正文、图片、站内视频、评论 | 只认 `/p/` 文章页；图片后缀 `.jpg` 不可信，MIME 要还原 |
 | 微信公众号 | `mp.weixin.qq.com` | 文章正文与图片 | 落盘规范与 [Wechat-Sharpen](https://github.com/UFOPC) 管线同构，见下 |
@@ -44,6 +45,8 @@
 > 顺序逐条列出 `*://*.<域名>/*`，扩展改不了那串文案，但可以保证顺序对得上，从上往下逐条能对上号。
 > 末尾另有多出来两行 `*://*.doubanio.com/*` / `*://*.sinaimg.cn/*`（图床的 host 权限），
 > 是浏览器自动补在 `content_scripts.matches` 之后的。
+> 微博桌面版（`weibo.com/detail/<mid>`）的适配器已在 manifest 里，但接口字段全部按公开接口构造、
+> **没在登录态下验证过**，所以站点表暂不计入；等实测过再补成正式支持。
 > 下厨房详情页有滑块风控，脚本化访问会拿到验证页，它的回归用例喂的是用户保存的页面快照。
 
 > **加站时两个 matches 不是一回事**：`content_scripts.matches` 可以带路径
@@ -211,7 +214,7 @@ SNAP=~/Pictures/某菜谱.html PW=… PW_EXE=… node test/e2e-xcf-snapshot.mjs
 ## 项目结构
 
 ```
-manifest.json          MV3 清单：8 个 content script / 11 个站点 + 一个 service worker
+manifest.json          MV3 清单：9 个 content script / 11 个站点 + 一个 service worker
 js/
   background.js        消息路由、IndexedDB 暂存、小红书取数与组装
   rn-format.js         命名 / frontmatter / 图文混排 / 清晰度档位，所有站点共用
@@ -219,11 +222,12 @@ js/
 content/
   index.js|css         小红书：胶囊、面板、评论展开、进度、清晰度、原视频
   discuz.js|css        Discuz! X 通用引擎（Chiphell / 远景 / 恩山 / 耳机大家坛）：作者模式、跨页、附件格
-  douban.js|css        豆瓣：影评 / 书评 / 乐评 + 小组话题，图片经后台补 Referer 取字节
+  douban.js|css        豆瓣：影评 / 书评 / 乐评 + 小组话题 + 个人动态，图片经后台补 Referer 取字节
   wechat.js            微信公众号：与 Wechat-Sharpen 同构的落盘规范
   sspai.js|css         少数派：含防盗链处理
   smzdm.js|css         什么值得买：含 MIME 还原与视频解密
   weibo.js|css         微博：单条图文，图片升级到 `/large/` 原图
+  weibo-desktop.js     微博桌面版：实验，接口未在登录态验证
   xiachufang.js|css    下厨房：菜谱解析，剥掉缩略图转码指令
   format-size.js       体积格式化（1000 进制，不引库）
 setting.html           设置页
