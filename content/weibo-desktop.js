@@ -87,15 +87,20 @@
   const picsOf = (status) => ((status && status.pics) || []).map(picUrl).filter(Boolean);
 
   async function readStatus(mid) {
+    /* 接口必须跟着页面 origin 走：manifest 同时注册了 weibo.com 与 www.weibo.com，
+     * 写死 https://weibo.com/ajax/... 时，从 www 页面发出的就是跨源请求，
+     * 而 host_permissions 里没有 weibo.com 的授权 → 被 CORS 挡掉 → 按钮「失败」、零下发。
+     * 带 www 的分享链接进来会永远存不了，所以这里不能用常量。 */
+    const base = location.origin;
     const data = await fetchJson(
-      "https://weibo.com/ajax/statuses/show?id=" + encodeURIComponent(mid) + "&locale=zh-CN"
+      base + "/ajax/statuses/show?id=" + encodeURIComponent(mid) + "&locale=zh-CN"
     );
 
     let text = richTextToText(data.text_raw);
     let longTextMissing = false;
     if (data.isLongText) {
       try {
-        const longData = await fetchJson("https://weibo.com/ajax/statuses/longtext?id=" + encodeURIComponent(mid));
+        const longData = await fetchJson(base + "/ajax/statuses/longtext?id=" + encodeURIComponent(mid));
         const fullText = richTextToText(longData.longText && longData.longText.longTextContent);
         if (fullText) text = fullText;
         else longTextMissing = true;

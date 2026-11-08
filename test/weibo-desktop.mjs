@@ -19,6 +19,9 @@ const BROWSER =
 
 const MID = "5359048358626912";
 const DETAIL_URL = `https://weibo.com/detail/${MID}`;
+/* 同一篇内容另一种入口：带 www 的分享链接。manifest 两个 host 都注册了，
+ * 所以这里也必须能存——接口要跟着页面 origin 走，否则是跨源请求。 */
+const WWW_DETAIL_URL = `https://www.weibo.com/detail/${MID}`;
 const HOME_URL = "https://weibo.com/";
 const AUTHOR = "桌面测试作者";
 const TRUNCATED_TEXT = "截断版正文不应采用";
@@ -54,7 +57,13 @@ const check = (name, cond) => {
 const browser = await chromium.launch({ executablePath: BROWSER, headless: true });
 
 async function openPage(url, options = {}) {
+  /* 接口 URL 跟着「页面 origin」走：weibo.com 与 www.weibo.com 都要能测。
+   * 顺带记一份实际发出的请求，用来断言跨源调用没有发生。 */
+  const origin = options.origin || "https://weibo.com";
   const page = await browser.newPage();
+  const requested = [];
+  page.on("request", (req) => requested.push(req.url()));
+  page.__requested = requested;
   await page.addInitScript(() => {
     window.__SENT = [];
     window.__FAKE_JPEG =
@@ -75,13 +84,13 @@ async function openPage(url, options = {}) {
 
   /* 先全拦，再注册接口与页面；Playwright 后注册的路由优先匹配。 */
   await page.route("**/*", (route) => route.abort());
-  await page.route("https://weibo.com/ajax/statuses/show**", (route) => {
+  await page.route(origin + "/ajax/statuses/show**", (route) => {
     if (options.showStatus === 403) {
       return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ ok: 0 }) });
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(showFixture) });
   });
-  await page.route("https://weibo.com/ajax/statuses/longtext**", (route) =>
+  await page.route(origin + "/ajax/statuses/longtext**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(longTextFixture) })
   );
   await page.route(url, (route) =>
@@ -181,6 +190,51 @@ try {
   const count = await home.evaluate(() => document.querySelectorAll(".wbd-xhx-slot").length);
   check(`首页胶囊数量为 0（实际 ${count}）`, count === 0);
   await home.close();
+
+  /* ---------- www.weibo.com 入口 ----------
+   * manifest 同时注册了 weibo.com 与 www.weibo.com，但早期接口地址写死成
+   * https://weibo.com/ajax/...，在 www 页面上属于跨源请求，且 host_permissions
+   * 里没有 weibo.com → CORS 挡掉 → 按钮「失败」、零下发。
+   * 这条用例只拦 www.weibo.com 的接口，把写死域名的实现直接暴露成红。 */
+  console.log("\n[5] www.weibo.com 入口：接口跟着页面 origin 走");
+  const www = await openPage(WWW_DETAIL_URL, { origin: "https://www.weibo.com" });
+  await www.waitForSelector(".wbd-xhx-slot", { timeout: 10000 });
+  await www.hover(".wbd-xhx-slot");
+  await www.waitForSelector(".wb-xhx-panel", { state: "visible", timeout: 5000 });
+  await www.click(".wb-xhx-act");
+  /* 成功或失败都等：失败路径也要能继续往下断言，否则只能看到一个超时。 */
+  await www
+    .waitForFunction(
+      () => {
+        const act = document.querySelector(".wb-xhx-act");
+        const sentMd = window.__SENT.some(
+          (msg) => msg.type === "downloadFiles" && (msg.data.files || []).some((f) => f.mime === "text/markdown")
+        );
+        return sentMd || (act && act.textContent === "失败");
+      },
+      null,
+      { timeout: 20000 }
+    )
+    .catch(() => {});
+
+  const wwwMessages = await sentOf(www);
+  const wwwFiles = wwwMessages.filter((m) => m.type === "downloadFiles").flatMap((m) => m.data.files || []);
+  const wwwMd = wwwFiles.find((f) => f.mime === "text/markdown");
+  const wwwLabel = ((await www.textContent(".wb-xhx-act")) || "").trim();
+  check(`www 页能取到接口数据并产出 md（按钮「${wwwLabel}」）`, !!wwwMd);
+  if (wwwMd) {
+    check("正文仍是 longtext 完整版", wwwMd.text.includes("长文正文第一段"));
+    /* :139 那条规范地址是写给 frontmatter 的，不跟随页面 origin，别被顺手改掉。 */
+    check(
+      `frontmatter 链接仍是规范地址（实际「${(/^链接: (.*)$/m.exec(wwwMd.text) || [])[1]}」）`,
+      /^链接: https:\/\/weibo\.com\/detail\/5359048358626912$/m.test(wwwMd.text)
+    );
+  }
+  const crossOrigin = www.__requested.filter((u) => u.startsWith("https://weibo.com/ajax/"));
+  check(`没有跨源请求 https://weibo.com/ajax/（实际 ${crossOrigin.length} 条）`, crossOrigin.length === 0);
+  const sameOrigin = www.__requested.filter((u) => u.startsWith("https://www.weibo.com/ajax/"));
+  check(`请求打在 www.weibo.com/ajax 上（实际 ${sameOrigin.length} 条）`, sameOrigin.length >= 2);
+  await www.close();
 } catch (e) {
   console.error("✗ " + String((e && e.message) || e).split("\n")[0]);
   fails.push("异常中断");
